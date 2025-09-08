@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 
 const ProtectedRoute = ({ allowedRoles }) => {
   const user = JSON.parse(localStorage.getItem("user") || "null");
-  const userRoles = user?.roles || []; // Get array of roles
+  //const userRoles = user?.roles || []; // Get array of roles
+  const userRoles = user?.roles || (user?.role ? [user.role] : []);
   const { showToast } = useToast();
   const hasShownToast = useRef(false);
 

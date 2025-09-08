@@ -13,7 +13,8 @@ const Navbar = () => {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "null");
-    const roles = user?.roles || [];
+    //const roles = user?.roles || [];
+    const roles = user?.roles || (user?.role ? [user.role] : []);
     setUserRoles(roles);
   }, [location.pathname]);
 
