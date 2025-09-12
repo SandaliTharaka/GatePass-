@@ -122,7 +122,7 @@ const Login = () => {
               </div>
               
               <div className="space-y-4 text-white">
-                <h2 className="text-2xl font-bold tracking-tight">Welcome to Gate Pass Portal tt</h2>
+                <h2 className="text-2xl font-bold tracking-tight">Welcome to Gate Pass Portal</h2>
                 <p className="opacity-80 leading-relaxed">
                   Secure, efficient, and user-friendly access management for SLT premises.
                 </p>
