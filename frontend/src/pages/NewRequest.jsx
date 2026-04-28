@@ -140,6 +140,67 @@ const NewRequest = () => {
     setUser(userData);
   }, []);
 
+  useEffect(() => {
+    try {
+      const rawDraft = localStorage.getItem("resendDraft");
+      if (!rawDraft) return;
+
+      const draft = JSON.parse(rawDraft);
+
+      if (draft.destinationType) setDestinationType(draft.destinationType);
+      if (draft.outLocation) setOutLocation(draft.outLocation);
+      if (draft.inLocation) setInLocation(draft.inLocation);
+
+      if (draft.companyName) setCompanyName(draft.companyName);
+      if (draft.companyAddress) setCompanyAddress(draft.companyAddress);
+
+      if (draft.executiveOfficer) setExecutiveOfficer(draft.executiveOfficer);
+
+      if (draft.receiverServiceNo) setReceiverServiceNo(draft.receiverServiceNo);
+      if (draft.receiverNIC) setReceiverNIC(draft.receiverNIC);
+      if (draft.receiverName) setReceiverName(draft.receiverName);
+      if (draft.receiverContact) setReceiverContact(draft.receiverContact);
+
+      if (draft.transportMethod) setTransportMethod(draft.transportMethod);
+      if (draft.transporterType) setTransporterType(draft.transporterType);
+      if (draft.transporterServiceNo)
+        setTransporterServiceNo(draft.transporterServiceNo);
+
+      if (draft.nonSLTTransporterName)
+        setNonSLTTransporterName(draft.nonSLTTransporterName);
+      if (draft.nonSLTTransporterNIC)
+        setNonSLTTransporterNIC(draft.nonSLTTransporterNIC);
+      if (draft.nonSLTTransporterPhone)
+        setNonSLTTransporterPhone(draft.nonSLTTransporterPhone);
+      if (draft.nonSLTTransporterEmail)
+        setNonSLTTransporterEmail(draft.nonSLTTransporterEmail);
+
+      if (draft.vehicleNumber) setVehicleNumber(draft.vehicleNumber);
+      if (draft.vehicleModel) setVehicleModel(draft.vehicleModel);
+
+      if (Array.isArray(draft.items) && draft.items.length > 0) {
+        const prefilledItems = draft.items.map((entry) => ({
+          serialNumber: entry.serialNumber || "",
+          itemCode: entry.itemCode || "",
+          itemDescription: entry.itemDescription || "",
+          itemCategory: entry.itemCategory || "",
+          categoryDescription: entry.categoryDescription || "",
+          qty: Number(entry.qty || 1),
+          returnable: entry.returnable === "Yes" ? "Yes" : "No",
+          images: [],
+          returnDate: entry.returnDate || "",
+        }));
+        setItems(prefilledItems);
+      }
+
+      showToast("Resend form loaded. Please review and submit.", "success");
+      localStorage.removeItem("resendDraft");
+    } catch (error) {
+      console.error("Failed to load resend draft:", error);
+      localStorage.removeItem("resendDraft");
+    }
+  }, [showToast]);
+
   // Fetch user stats
   useEffect(() => {
     const fetchUserStats = async () => {

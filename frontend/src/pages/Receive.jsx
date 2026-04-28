@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   createStatus,
   getPendingStatuses,
@@ -167,6 +168,7 @@ const fetchOfficerData = async (status) => {
 };
 
 const Receive = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("pending");
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setselectedItem] = useState(null);
@@ -202,6 +204,68 @@ const Receive = () => {
   const [companyTypeFilter, setCompanyTypeFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  const buildResendDraft = (item) => {
+    const requestDetails = item?.requestDetails || {};
+    const transport = requestDetails.transport || {};
+    const rawItems =
+      (Array.isArray(requestDetails.items) && requestDetails.items) ||
+      item?.items ||
+      [];
+
+    const returnableStatuses = new Set([
+      "returnable",
+      "return to sender",
+      "return to petrol leader",
+      "return to out location petrol leader",
+      "return to executive officer",
+      "returned",
+    ]);
+
+    const mappedItems = rawItems.map((entry) => {
+      const statusText = String(entry?.status || "").toLowerCase();
+      const isReturnable =
+        entry?.itemReturnable === true || returnableStatuses.has(statusText);
+
+      return {
+        serialNumber: entry?.serialNumber || entry?.serialNo || "",
+        itemCode: entry?.itemCode || "",
+        itemDescription: entry?.itemDescription || "",
+        itemCategory: entry?.itemCategory || "",
+        categoryDescription: entry?.categoryDescription || "",
+        qty: Number(entry?.itemQuantity || entry?.qty || 1),
+        returnable: isReturnable ? "Yes" : "No",
+        returnDate: entry?.returnDate || "",
+        images: [],
+      };
+    });
+
+    return {
+      destinationType: requestDetails?.isNonSltPlace ? "non-slt" : "slt",
+      outLocation:
+        requestDetails?.outLocation || item?.outLocation || "",
+      inLocation:
+        requestDetails?.inLocation || item?.inLocation || "",
+      companyName: requestDetails?.companyName || "",
+      companyAddress: requestDetails?.companyAddress || "",
+      executiveOfficer: requestDetails?.executiveOfficerServiceNo || "",
+      receiverServiceNo: requestDetails?.receiverServiceNo || "",
+      receiverNIC: requestDetails?.receiverNIC || "",
+      receiverName: requestDetails?.receiverName || "",
+      receiverContact: requestDetails?.receiverContact || "",
+      transportMethod: transport?.transportMethod || "",
+      transporterType: transport?.transporterType || "",
+      transporterServiceNo: transport?.transporterServiceNo || "",
+      nonSLTTransporterName: transport?.nonSLTTransporterName || "",
+      nonSLTTransporterNIC: transport?.nonSLTTransporterNIC || "",
+      nonSLTTransporterPhone: transport?.nonSLTTransporterPhone || "",
+      nonSLTTransporterEmail: transport?.nonSLTTransporterEmail || "",
+      vehicleNumber: transport?.vehicleNumber || "",
+      vehicleModel: transport?.vehicleModel || "",
+      items: mappedItems,
+      sourceReferenceNumber: item?.refNo || "",
+    };
+  };
 
   // Initialize userDetails from localStorage (once)
   useEffect(() => {
@@ -933,11 +997,14 @@ const Receive = () => {
       setComment("");
 
       // Show immediate feedback
-      showToast("Request rejected successfully", "success");
+      showToast("Request rejected. Preparing resend form...", "success");
 
       // Call API in background (don't await)
       rejectStatus(item.refNo, comment)
         .then(async (updatedStatus) => {
+          const resendDraft = buildResendDraft(item);
+          localStorage.setItem("resendDraft", JSON.stringify(resendDraft));
+
           // Trigger refetch of rejected items to get fresh data from server
           setRefetchTrigger((prev) => prev + 1);
 
@@ -945,6 +1012,9 @@ const Receive = () => {
           sendRejectionEmail(item, comment).catch((err) => {
             console.error("Failed to send rejection email:", err);
           });
+
+          showToast("Rejected. Opening New Request for resend.", "success");
+          navigate("/newrequest");
         })
         .catch((error) => {
           // Rollback on error
@@ -4701,7 +4771,7 @@ const RequestDetailsModal = ({
                           onClick={() => handleReject(request)}
                           className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium flex items-center"
                         >
-                          <FaTimes className="mr-2" /> Reject
+                          <FaTimes className="mr-2" /> Reject & Resend
                         </button>
                         <button
                           onClick={() => handleApprove(request)}
