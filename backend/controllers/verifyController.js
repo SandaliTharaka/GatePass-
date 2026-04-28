@@ -624,9 +624,6 @@ exports.updateApproved = async (req, res) => {
       await status.request.save();
     }
 
-    if (status.request && status.request.isModified()) {
-      await status.request.save();
-    }
     await status.save();
 
     // Email Petrol Leader (Dispatch) at IN-location for dispatch approval
