@@ -631,7 +631,7 @@ exports.updateApproved = async (req, res) => {
 
     // Email Petrol Leader (Dispatch) at IN-location for dispatch approval
     try {
-      const pleader = await findPetrolLeaderForInLocation(inLocation);
+      const pleader = await findPetrolLeaderForInLocation(inLocationName);
       if (pleader && pleader.email) {
         const subject = `Gate Pass ready for dispatch approval: ${referenceNumber}`;
         const html = `
