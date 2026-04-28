@@ -35,7 +35,7 @@ import {
   validateCompanyName,
   validateNIC,
   sanitizeNICInput,
-  sanitizeIntegerInput,
+  sanitizePhoneInput,
   sanitizeLettersOnlyInput,
   sanitizeSerialNumberInput,
   validatePhone,
@@ -1641,9 +1641,9 @@ const NewRequest = () => {
                       <input
                         type="text"
                         value={receiverContact}
-                        maxLength={10}
+                        maxLength={12}
                         onChange={(e) => {
-                          const value = sanitizeIntegerInput(e.target.value);
+                          const value = sanitizePhoneInput(e.target.value);
                           setReceiverContact(value);
                           const error = validatePhone(value);
                           setReceiverContactError(error);
@@ -2479,9 +2479,9 @@ const NewRequest = () => {
                           }`}
                           type="text"
                           value={nonSLTTransporterPhone}
-                          maxLength={10}
+                          maxLength={12}
                           onChange={(e) => {
-                            const value = sanitizeIntegerInput(e.target.value);
+                            const value = sanitizePhoneInput(e.target.value);
                             setNonSLTTransporterPhone(value);
                             const error = validatePhone(value);
                             setNonSLTTransporterPhoneError(error);
@@ -2694,9 +2694,9 @@ const NewRequest = () => {
                           }`}
                           type="text"
                           value={nonSLTTransporterPhone}
-                          maxLength={10}
+                          maxLength={12}
                           onChange={(e) => {
-                            const value = sanitizeIntegerInput(e.target.value);
+                            const value = sanitizePhoneInput(e.target.value);
                             setNonSLTTransporterPhone(value);
                             const error = validatePhone(value);
                             setNonSLTTransporterPhoneError(error);
