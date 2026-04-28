@@ -43,6 +43,7 @@ import {
   validateName,
   validateAddress,
   validateSerialNumber,
+  validateServiceNumber,
 } from "../utils/validators.js";
 
 const NewRequest = () => {
@@ -498,8 +499,16 @@ const NewRequest = () => {
   };
 
   const handleSearchReceiver = async () => {
-    if (!receiverServiceNo.trim()) {
+    const normalizedReceiverServiceNo = receiverServiceNo.trim();
+
+    if (!normalizedReceiverServiceNo) {
       showToast("Please enter a service number", "warning");
+      return;
+    }
+
+    const serviceNoError = validateServiceNumber(normalizedReceiverServiceNo);
+    if (serviceNoError) {
+      showToast(serviceNoError, "warning");
       return;
     }
 
@@ -508,7 +517,7 @@ const NewRequest = () => {
       const response = await axiosInstance.post("/erp/employee-details", {
         organizationID: "string",
         costCenterCode: "string",
-        employeeNo: receiverServiceNo.trim(),
+        employeeNo: normalizedReceiverServiceNo,
       });
 
       if (response.data && response.data.success && response.data.data) {
@@ -544,6 +553,9 @@ const NewRequest = () => {
         };
 
         setReceiverDetails(receiverData);
+        if (receiverData.serviceNo) {
+          setReceiverServiceNo(String(receiverData.serviceNo).trim());
+        }
 
         if (empData.fingerScanLocation) {
           setReceiverFingerLocation(empData.fingerScanLocation.trim());
@@ -557,6 +569,9 @@ const NewRequest = () => {
           const data = await searchReceiverByServiceNo(receiverServiceNo);
           if (data) {
             setReceiverDetails(data);
+            if (data.serviceNo) {
+              setReceiverServiceNo(String(data.serviceNo).trim());
+            }
             showToast("Receiver details loaded from database", "success");
           } else {
             setReceiverDetails(null);
@@ -573,6 +588,9 @@ const NewRequest = () => {
         const data = await searchReceiverByServiceNo(receiverServiceNo);
         if (data) {
           setReceiverDetails(data);
+          if (data.serviceNo) {
+            setReceiverServiceNo(String(data.serviceNo).trim());
+          }
           showToast("Receiver details loaded from database", "success");
         } else {
           setReceiverDetails(null);

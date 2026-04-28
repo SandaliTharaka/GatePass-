@@ -1,5 +1,8 @@
 import axiosInstance from "./axiosConfig";
 
+const isLikelyServiceNo = (value) =>
+  /^\d+$/.test(String(value || "").trim());
+
 // Create a new status
 export const createStatus = async (statusData) => {
   try {
@@ -67,10 +70,15 @@ export const rejectStatus = async (referenceNumber, comment) => {
 };
 
 export const searchUserByServiceNo = async (serviceNo) => {
-  if (!serviceNo) throw new Error("Service number is required");
+  const normalizedServiceNo = String(serviceNo || "").trim();
+  if (!normalizedServiceNo || !isLikelyServiceNo(normalizedServiceNo)) {
+    return null;
+  }
 
   try {
-    const response = await axiosInstance.get(`/users/${serviceNo}`);
+    const response = await axiosInstance.get(
+      `/users/${encodeURIComponent(normalizedServiceNo)}`,
+    );
     return response.data;
   } catch (error) {
     if (error.response?.status === 404) {

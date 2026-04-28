@@ -1,5 +1,8 @@
 import axiosInstance from "./axiosConfig";
 
+const isLikelyServiceNo = (value) =>
+  /^\d+$/.test(String(value || "").trim());
+
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || axiosInstance.defaults.baseURL || "";
 
@@ -56,10 +59,15 @@ const buildImageUrl = (rawPath) => {
 };
 
 export const searchSenderByServiceNo = async (serviceNo) => {
-  if (!serviceNo) throw new Error("Service number is required");
+  const normalizedServiceNo = String(serviceNo || "").trim();
+  if (!normalizedServiceNo || !isLikelyServiceNo(normalizedServiceNo)) {
+    return null;
+  }
 
   try {
-    const response = await axiosInstance.get(`/users/${serviceNo}`);
+    const response = await axiosInstance.get(
+      `/users/${encodeURIComponent(normalizedServiceNo)}`,
+    );
     return response.data;
   } catch (error) {
     if (error.response?.status === 404) {
@@ -70,10 +78,15 @@ export const searchSenderByServiceNo = async (serviceNo) => {
 };
 
 export const searchReceiverByServiceNo = async (serviceNo) => {
-  if (!serviceNo) throw new Error("Service number is required");
+  const normalizedServiceNo = String(serviceNo || "").trim();
+  if (!normalizedServiceNo || !isLikelyServiceNo(normalizedServiceNo)) {
+    return null;
+  }
 
   try {
-    const response = await axiosInstance.get(`/users/${serviceNo}`);
+    const response = await axiosInstance.get(
+      `/users/${encodeURIComponent(normalizedServiceNo)}`,
+    );
     return response.data;
   } catch (error) {
     if (error.response?.status === 404) {

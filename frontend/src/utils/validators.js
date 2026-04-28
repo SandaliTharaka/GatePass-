@@ -161,6 +161,9 @@ export const validateServiceNumber = (serviceNo) => {
   if (!serviceNo || !serviceNo.trim()) {
     return "Service number is required";
   }
+  if (!/^\d+$/.test(serviceNo.trim())) {
+    return "Service number must contain digits only";
+  }
   return "";
 };
 
