@@ -1782,6 +1782,15 @@ const RequestDetailsModal = ({
     }
   };
 
+  const isNonSltLoadingStepInvalid =
+    currentTab === "loading" &&
+    staffType === "Non-SLT" &&
+    (!nonSltStaffDetails.name?.trim() ||
+      !nonSltStaffDetails.companyName?.trim() ||
+      !nonSltStaffDetails.nic?.trim() ||
+      !nonSltStaffDetails.contactNo?.trim() ||
+      !nonSltStaffDetails.email?.trim());
+
   // Functions for returnable items editing
   const handleEditReturnableDESCRIPTION = (item) => {
     setEditingItemSerialNo(item.serialNumber);
@@ -4656,7 +4665,12 @@ const RequestDetailsModal = ({
                   {currentTab !== "navigation" && (
                     <button
                       onClick={goToNextTab}
-                      className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center"
+                      disabled={isNonSltLoadingStepInvalid}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center ${
+                        isNonSltLoadingStepInvalid
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : "bg-blue-500 hover:bg-blue-600 text-white"
+                      }`}
                     >
                       Next <FaArrowRight className="ml-2" />
                     </button>
