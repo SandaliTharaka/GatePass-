@@ -353,18 +353,20 @@ const NewRequest = () => {
 
     const remainingSlots = Math.max(0, 5 - currentItem.images.length);
     if (remainingSlots <= 0) {
-      showToast("Maximum 5 photos allowed per item", "warning");
+      showToast("Maximum 5 photos allowed per item (minimum 2 required)", "warning");
       e.target.value = "";
       return;
     }
 
     if (files.length > remainingSlots) {
-      showToast(`Only ${remainingSlots} more photo(s) can be added`, "warning");
+      showToast(`Cannot add ${files.length} photos. Only ${remainingSlots} more photo(s) can be added`, "warning");
+      e.target.value = "";
+      return;
     }
 
     setCurrentItem((prev) => ({
       ...prev,
-      images: [...prev.images, ...files.slice(0, remainingSlots)],
+      images: [...prev.images, ...files],
     }));
 
     // Reset so selecting the same file again still triggers onChange.
@@ -436,6 +438,12 @@ const NewRequest = () => {
     // Validate return date if returnable is Yes
     if (currentItem.returnable === "Yes" && !currentItem.returnDate) {
       showToast("Please select a return date for returnable items", "warning");
+      return;
+    }
+
+    // Validate images: minimum 2, maximum 5
+    if (currentItem.images.length < 2) {
+      showToast("Please upload at least 2 images for the item", "warning");
       return;
     }
 
@@ -1524,14 +1532,14 @@ const NewRequest = () => {
                       <input
                         type="text"
                         value={receiverServiceNo}
-                        onChange={(e) => setReceiverServiceNo(e.target.value)}
+                        onChange={(e) => setReceiverServiceNo(e.target.value.replace(/[^0-9]/g, ''))}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
                             handleSearchReceiver(); // SAME as Search button
                           }
                         }}
-                        placeholder="Enter receiver's service number"
+                        placeholder="Enter receiver's   service number"
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
                       />
                       <button
@@ -1590,7 +1598,7 @@ const NewRequest = () => {
                         value={receiverNIC}
                         maxLength={12}
                         onChange={(e) => {
-                          const value = sanitizeNICInput(e.target.value);
+                          const value = e.target.value.replace(/[^0-9]/g, '');
                           setReceiverNIC(value);
                           const error = validateNIC(value);
                           setReceiverNICError(error);
@@ -1643,7 +1651,7 @@ const NewRequest = () => {
                         value={receiverContact}
                         maxLength={12}
                         onChange={(e) => {
-                          const value = sanitizePhoneInput(e.target.value);
+                          const value = e.target.value.replace(/[^0-9]/g, '');
                           setReceiverContact(value);
                           const error = validatePhone(value);
                           setReceiverContactError(error);
@@ -2084,7 +2092,7 @@ const NewRequest = () => {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Item Images (Up to 5)
+                        Item Images (2-5 required)
                       </label>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {currentItem.images.map((image, idx) => (
