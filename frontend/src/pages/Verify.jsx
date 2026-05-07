@@ -1558,30 +1558,11 @@ const Verify = () => {
           return;
         }
 
-        // Call API to approve status with comment and loading details
-        const updatedStatus = await approveStatus(
-          item.refNo,
-          comment,
-          loadingDetails,
-          userDetails.serviceNo,
-        );
-
-        // Send emails to both petrol leaders and receiver
-        await sendApprovalEmails(item, comment);
-
-        // Format the approved item in the same structure as your UI expects
-        const approvedDESCRIPTION = {
-          refNo: updatedStatus.referenceNumber,
-          name: updatedStatus.request?.name,
-          inLocation: updatedStatus.request?.inLocation,
-          outLocation: updatedStatus.request?.outLocation,
-          createdAt: new Date(
-            updatedStatus.request?.createdAt || updatedStatus.createdAt,
-          ).toLocaleString(),
-          items: updatedStatus.request?.items || [],
-          comment: updatedStatus.verifyOfficerComment,
-          requestDetails: { ...updatedStatus.request },
-        };
+        loadingDetails.nonSLTStaffName = nonSltStaffDetails.name;
+        loadingDetails.nonSLTStaffCompany = nonSltStaffDetails.companyName;
+        loadingDetails.nonSLTStaffNIC = nonSltStaffDetails.nic;
+        loadingDetails.nonSLTStaffContact = nonSltStaffDetails.contactNo;
+        loadingDetails.nonSLTStaffEmail = nonSltStaffDetails.email;
       }
 
       console.log("=== Starting approval process ===");
