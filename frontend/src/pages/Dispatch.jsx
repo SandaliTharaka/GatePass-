@@ -8,21 +8,30 @@ import {
   searchUserByServiceNo,
   markItemsAsReturned,
 } from "../services/DispatchService.js";
+import { getUserByRoleAndBranch } from "../services/userManagementService.js";
+import { getEmployeeDetails } from "../services/erpService";
 import {
+  getImageUrl,
   getImageUrlSync,
-  searchReceiverByServiceNo,
   searchEmployeeByServiceNo,
+  searchReceiverByServiceNo,
 } from "../services/RequestService.js";
-import { jsPDF } from "jspdf";
 import { useToast } from "../components/ToastProvider.jsx";
-import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { emailSent } from "../services/emailService.js";
-import { getCachedUser, setCachedUser } from "../utils/userCache.js";
+import { jsPDF } from "jspdf";
+import logoUrl from "../assets/SLTMobitel_Logo.png";
+import { useLocation } from "react-router-dom";
+import {
+  getCachedUser,
+  getCachedUserAllowRefresh,
+  setCachedUser,
+} from "../utils/userCache.js";
 import { useAutoRefetch } from "../hooks/useRealtimeUpdates.js";
 import {
   FaClock,
   FaEye,
   FaUser,
+  FaPlus,
   FaBoxOpen,
   FaMapMarkerAlt,
   FaUserCheck,
@@ -30,51 +39,407 @@ import {
   FaInfoCircle,
   FaTimesCircle,
   FaCheckCircle,
+  FaTruck,
   FaSearch,
   FaCheck,
-  FaTruck,
+  FaPrint,
+  FaBoxes,
+  FaBuilding,
+  FaUserFriends,
+  FaHardHat,
+  FaFilePdf,
   FaArrowLeft,
   FaArrowRight,
-  FaFilePdf,
-  FaPrint,
   FaUndo,
 } from "react-icons/fa";
+
+const generateitemDetailsPDF = (fullRequest) => {
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 36;
+    const usableWidth = pageWidth - margin * 2;
+    const lh = 12;
+    const palette = {
+      navy: [20, 55, 120],
+      slate: [78, 92, 115],
+      headingBg: [240, 245, 255],
+      border: [210, 218, 230],
+      tableHeader: [226, 234, 247],
+      text: [33, 37, 41],
+      rowAlt: [249, 251, 255],
+    };
+
+    const addHeader = () => {
+      try {
+        doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
+      } catch (e) {
+        // ignore logo rendering issues
+      }
+
+      doc.setDrawColor(...palette.navy);
+      doc.setLineWidth(1.1);
+      doc.line(margin, 64, pageWidth - margin, 64);
+
+      doc.setFontSize(17);
+      doc.setTextColor(...palette.navy);
+      doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text("Official Item Movement Record", pageWidth / 2, 46, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
+        align: "right",
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(...palette.text);
+      const refText = `Reference: ${fullRequest.referenceNumber || fullRequest.refNo || fullRequest.ref || "-"}`;
+      doc.text(refText, pageWidth / 2, 58, { align: "center" });
+    };
+
+    const ensurePage = (neededHeight) => {
+      if (currentY + neededHeight > pageHeight - margin - 22) {
+        doc.addPage();
+        addHeader();
+        currentY = 84;
+      }
+    };
+
+    const drawKeyValueBox = (title, fields) => {
+      const titleH = 18;
+      const valueMaxWidth = usableWidth * 0.62;
+      const rows = fields.map((f) => {
+        const valueLines = doc.splitTextToSize(String(f[1] || "-"), valueMaxWidth);
+        const rowHeight = Math.max(18, valueLines.length * lh + 6);
+        return { key: f[0], valueLines, rowHeight };
+      });
+      const contentHeight = rows.reduce((sum, r) => sum + r.rowHeight, 0);
+
+      ensurePage(titleH + contentHeight + 18);
+
+      doc.setFillColor(...palette.headingBg);
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY, usableWidth, titleH, "FD");
+
+      doc.setFontSize(10.5);
+      doc.setTextColor(...palette.navy);
+      doc.text(title, margin + 8, currentY + 12);
+
+      let rowTop = currentY + titleH;
+      rows.forEach((row, idx) => {
+        if (idx % 2 === 1) {
+          doc.setFillColor(...palette.rowAlt);
+          doc.rect(margin, rowTop, usableWidth, row.rowHeight, "F");
+        }
+
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.slate);
+        doc.text(String(row.key || "-"), margin + 8, rowTop + 12);
+
+        doc.setTextColor(...palette.text);
+        row.valueLines.forEach((line, lineIdx) => {
+          doc.text(line, margin + usableWidth * 0.34 + 8, rowTop + 12 + lineIdx * lh);
+        });
+
+        doc.setDrawColor(...palette.border);
+        doc.setLineWidth(0.4);
+        doc.line(margin, rowTop + row.rowHeight, margin + usableWidth, rowTop + row.rowHeight);
+        rowTop += row.rowHeight;
+      });
+
+      doc.rect(margin, currentY, usableWidth, titleH + contentHeight);
+      currentY = rowTop + 12;
+    };
+
+    // start
+    addHeader();
+    let currentY = 84;
+
+    // Sender details
+    const senderInfo =
+      user ||
+      fullRequest.sender ||
+      fullRequest.senderDetails ||
+      fullRequest.user ||
+      fullRequest.requestDetails?.senderDetails ||
+      fullRequest.request?.senderDetails ||
+      {};
+
+    drawKeyValueBox("Sender Details", [
+      ["Name", senderInfo.name || senderInfo.displayName || "-"],
+      ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || senderInfo.senderServiceNo || fullRequest.senderServiceNo || "-"],
+      ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
+      ["Section", senderInfo.section || senderInfo.department || "-"],
+      ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
+      ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
+    ]);
+
+    const formatDateValue = (dateValue) => {
+      if (!dateValue) return "-";
+      const dateObj = new Date(dateValue);
+      if (Number.isNaN(dateObj.getTime())) return String(dateValue);
+      return dateObj.toLocaleDateString();
+    };
+
+    const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
+    if (!items.length) {
+      drawKeyValueBox("Item Details", [["Items", "No items available"]]);
+    } else {
+      items.forEach((it, idx) => {
+        const itemFields = [
+          ["Description", it.itemDescription || it.description || "-"],
+          ["Serial No", it.serialNumber || "-"],
+          ["Item Code", it.itemCode || "-"],
+          ["Category", it.categoryDescription || it.category || "-"],
+          ["Quantity", String(it.itemQuantity || it.quantity || "-")],
+          ["Status", it.status || "-"],
+        ];
+
+        const isReturnable =
+          it.itemReturnable ||
+          it.isReturnable ||
+          String(it.status || "").toLowerCase() === "return to sender" ||
+          String(it.status || "").toLowerCase() === "returnable";
+
+        if (isReturnable) {
+          itemFields.push([
+            "Return Date",
+            formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+          ]);
+        }
+
+        drawKeyValueBox(`Item Details - Item ${idx + 1}`, itemFields);
+      });
+    }
+
+    const hdrH = 20;
+
+    const returnableItems = items.filter((it) => it.itemReturnable || it.isReturnable || it.status === "return to Sender");
+    if (returnableItems.length > 0) {
+      ensurePage(30 + 40);
+      doc.setFontSize(10.5);
+      doc.setTextColor(...palette.navy);
+      doc.text("Returnable Items", margin, currentY);
+      currentY += 14;
+
+      const retCols = ["Description", "Serial No", "Item Code", "Category", "Qty", "Return Date"];
+      const retColW = [usableWidth * 0.28, usableWidth * 0.14, usableWidth * 0.12, usableWidth * 0.12, usableWidth * 0.09, usableWidth * 0.25];
+      const retColX = [margin];
+      for (let i = 1; i < retColW.length; i++) retColX[i] = retColX[i - 1] + retColW[i - 1];
+
+      doc.setFillColor(...palette.tableHeader);
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.navy);
+      retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+      currentY += hdrH + 6;
+
+      returnableItems.forEach((it, idx) => {
+        const desc = it.itemDescription || it.description || "-";
+        const descLines = doc.splitTextToSize(desc, retColW[0] - 8);
+        const rowH = Math.max(20, descLines.length * lh + 6);
+
+        if (currentY + rowH > pageHeight - margin) {
+          doc.addPage();
+          addHeader();
+          currentY = 84;
+          doc.setFillColor(...palette.tableHeader);
+          doc.setDrawColor(...palette.border);
+          doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+          doc.setFontSize(9);
+          doc.setTextColor(...palette.navy);
+          retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+          currentY += hdrH + 6;
+        }
+
+        if (idx % 2 === 1) {
+          doc.setFillColor(...palette.rowAlt);
+          doc.rect(margin, currentY - 2, usableWidth, rowH + 4, "F");
+        }
+        doc.setDrawColor(...palette.border);
+        doc.rect(margin, currentY - 2, usableWidth, rowH + 4);
+
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.text);
+        descLines.forEach((ln, li) => doc.text(ln, retColX[0] + 4, currentY + 10 + li * lh));
+        doc.text(it.serialNumber || "-", retColX[1] + 4, currentY + 12);
+        doc.text(it.itemCode || "-", retColX[2] + 4, currentY + 12);
+        doc.text(it.categoryDescription || it.category || "-", retColX[3] + 4, currentY + 12);
+        doc.text(String(it.itemQuantity || it.quantity || "-"), retColX[4] + 4, currentY + 12);
+        doc.text(
+          formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+          retColX[5] + 4,
+          currentY + 12,
+        );
+
+        currentY += rowH + 8;
+      });
+      currentY += 4;
+    }
+
+    // Location (always include required 3 fields)
+    drawKeyValueBox("Location Details", [
+      [
+        "Out Location",
+        fullRequest.outLocation ||
+          fullRequest.requestDetails?.outLocation ||
+          fullRequest.request?.outLocation ||
+          fullRequest.companyName ||
+          fullRequest.requestDetails?.companyName ||
+          fullRequest.request?.companyName ||
+          "-",
+      ],
+      [
+        "In Location",
+        fullRequest.inLocation ||
+          fullRequest.requestDetails?.inLocation ||
+          fullRequest.request?.inLocation ||
+          "-",
+      ],
+    ]);
+
+    const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
+    const isNonSltDestination = fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
+
+    const recv =
+      fullRequest.receiver ||
+      fullRequest.receiverDetails ||
+      (typeof receiver !== "undefined" ? receiver : null) || {
+        name: requestCore.receiverName || fullRequest.receiverName || "-",
+        nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
+        contactNo: requestCore.receiverContact || fullRequest.receiverContact || "-",
+        serviceNo: requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+        group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
+        companyName: requestCore.companyName || fullRequest.companyName || "-",
+        email: requestCore.receiverEmail || fullRequest.receiverEmail || "-",
+      };
+
+    if (isNonSltDestination) {
+      drawKeyValueBox("Receiver Details", [
+        ["Name", recv.name || requestCore.receiverName || "-"],
+        [
+          "Company",
+          fullRequest.companyName || requestCore.companyName || recv.companyName || "-",
+        ],
+        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+        ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
+      ]);
+    } else {
+      drawKeyValueBox("Receiver Details", [
+        ["Name", recv.name || requestCore.receiverName || "-"],
+        [
+          "Service No",
+          recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+        ],
+        ["Group", recv.group || requestCore.receiverGroup || "-"],
+        ["Section", recv.section || requestCore.receiverSection || "-"],
+        ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
+        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+      ]);
+    }
+
+    const t =
+      fullRequest.transport ||
+      fullRequest.transportData ||
+      requestCore.transport ||
+      requestCore.transportData ||
+      {};
+
+    const transportRows = [
+      ["Transport Method", t.transportMethod || "-"],
+      ["Transporter Type", t.transporterType || "-"],
+    ];
+
+    if (String(t.transporterType || "").toUpperCase() === "SLT") {
+      transportRows.push([
+        "Service No",
+        t.transporterServiceNo || requestCore.transporterServiceNo || "-",
+      ]);
+      transportRows.push([
+        "Name",
+        (typeof transporterDetails !== "undefined" ? transporterDetails?.name : null) || t.transporterName || requestCore.transporterName || "-",
+      ]);
+      transportRows.push([
+        "Section",
+        (typeof transporterDetails !== "undefined" ? transporterDetails?.section : null) || t.transporterSection || requestCore.transporterSection || "-",
+      ]);
+      transportRows.push([
+        "Group",
+        (typeof transporterDetails !== "undefined" ? transporterDetails?.group : null) || t.transporterGroup || requestCore.transporterGroup || "-",
+      ]);
+      transportRows.push([
+        "Designation",
+        (typeof transporterDetails !== "undefined" ? transporterDetails?.designation : null) || t.transporterDesignation || requestCore.transporterDesignation || "-",
+      ]);
+      transportRows.push([
+        "Contact",
+        (typeof transporterDetails !== "undefined" ? transporterDetails?.contactNo : null) || t.transporterContact || requestCore.transporterContact || "-",
+      ]);
+    } else {
+      transportRows.push([
+        "Name",
+        t.nonSLTTransporterName || requestCore.nonSLTTransporterName || "-",
+      ]);
+      transportRows.push([
+        "NIC",
+        t.nonSLTTransporterNIC || requestCore.nonSLTTransporterNIC || "-",
+      ]);
+      transportRows.push([
+        "Contact",
+        t.nonSLTTransporterPhone || requestCore.nonSLTTransporterPhone || "-",
+      ]);
+      transportRows.push([
+        "Email",
+        t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-",
+      ]);
+    }
+
+    if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
+      transportRows.push([
+        "Vehicle No",
+        t.vehicleNumber || requestCore.vehicleNumber || "-",
+      ]);
+      transportRows.push([
+        "Vehicle Model",
+        t.vehicleModel || requestCore.vehicleModel || "-",
+      ]);
+    }
+
+    drawKeyValueBox("Transport Details", transportRows);
+
+    const pageCount = doc.getNumberOfPages();
+    for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
+      doc.setPage(pageNo);
+      const footerY = pageHeight - 24;
+      doc.setDrawColor(...palette.border);
+      doc.line(margin, footerY - 10, pageWidth - margin, footerY - 10);
+      doc.setFontSize(8);
+      doc.setTextColor(...palette.slate);
+      doc.text("Electronically generated gate pass document", margin, footerY);
+      doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+    }
+
+    const safeRef = fullRequest.referenceNumber || fullRequest.refNo || fullRequest.ref || "gatepass";
+    doc.save(`SLT_GatePass_${safeRef}.pdf`);
+  };
 
 // Helper function to detect Non-SLT identifiers
 const isNonSltIdentifier = (serviceNo) => {
   if (!serviceNo) return false;
-  // Check for NSL prefix
   if (serviceNo.startsWith("NSL")) return true;
   return false;
 };
 
-const mapErpEmployeeToReceiver = (employee, fallbackServiceNo) => {
-  if (!employee) return null;
-
-  return {
-    name: `${employee.employeeTitle || ""} ${
-      employee.employeeFirstName || ""
-    } ${employee.employeeSurname || ""}`.trim(),
-    serviceNo: employee.employeeNo || fallbackServiceNo || "N/A",
-    designation: employee.designation || "-",
-    section: employee.empSection || "-",
-    group: employee.empGroup || "-",
-    contactNo: employee.mobileNo || "-",
-  };
-};
-
 const Dispatch = () => {
-  const fetchReceiverFromErp = async (serviceNo) => {
-    const response = await searchEmployeeByServiceNo(serviceNo);
-    const employee =
-      response?.data?.data?.[0] ||
-      response?.data?.data ||
-      response?.data?.[0] ||
-      response?.data ||
-      null;
-    return mapErpEmployeeToReceiver(employee, serviceNo);
-  };
-
   const [activeTab, setActiveTab] = useState("pending");
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setselectedItem] = useState(null);
@@ -84,161 +449,17 @@ const Dispatch = () => {
   const [rejectedDESCRIPTIONs, setRejectedDESCRIPTIONs] = useState([]);
   const [transportData, setTransportData] = useState(null);
   const { showToast } = useToast();
+
+  const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = loggedUser;
+  const role = loggedUser?.role?.toUpperCase();
+  const isSuperAdmin = role === "SUPERADMIN";
+
   const [searchTerm, setSearchTerm] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [companyTypeFilter, setCompanyTypeFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [user, setUser] = useState(null);
-
-  const isSuperAdmin =
-    user?.role === "SUPERADMIN" ||
-    user?.username === "SUPER001" ||
-    user?.serviceNo === "SUPER001";
-
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("user"));
-    setUser(userData);
-  }, []);
-
-  // Real-time updates for Dispatch page (status: 4 = Petrol Leader/Dispatch Pending)
-  useAutoRefetch(
-    async () => {
-      if (!user || !user.branches) return;
-
-      try {
-        const data = await getPendingStatuses();
-
-        const filteredData = data; // SuperAdmin: global, Pleader: branch-scoped by backend
-
-        const formattedData = await Promise.all(
-          filteredData.map(async (status) => {
-            const senderServiceNo = status.request?.employeeServiceNo;
-            const receiverServiceNo = status.request?.receiverServiceNo;
-            const loadingDetails = status.request?.loading;
-            const isNonSltPlace = status.request?.isNonSltPlace;
-            let senderDetails = null;
-            let receiverDetails = null;
-            let loadUserData = null;
-            let exerctiveOfficerData = null;
-            let verifyOfficerData = null;
-
-            if (senderServiceNo) {
-              try {
-                senderDetails = await getCachedUser(
-                  senderServiceNo,
-                  searchUserByServiceNo,
-                );
-              } catch (e) {}
-            }
-
-            if (
-              receiverServiceNo &&
-              !isNonSltPlace &&
-              !isNonSltIdentifier(receiverServiceNo)
-            ) {
-              try {
-                receiverDetails = await getCachedUser(
-                  receiverServiceNo,
-                  fetchReceiverFromErp,
-                );
-              } catch (e) {}
-            } else if (isNonSltPlace || isNonSltIdentifier(receiverServiceNo)) {
-              receiverDetails = {
-                name: status.request?.receiverName || "N/A",
-                nic: status.request?.receiverNIC || receiverServiceNo,
-                contactNo: status.request?.receiverContact || "N/A",
-              };
-            }
-
-            if (
-              loadingDetails?.staffType === "SLT" &&
-              loadingDetails.staffServiceNo
-            ) {
-              try {
-                loadUserData = await getCachedUser(
-                  loadingDetails.staffServiceNo,
-                  searchUserByServiceNo,
-                );
-              } catch (e) {}
-            }
-
-            if (status.executiveOfficerServiceNo) {
-              try {
-                exerctiveOfficerData = await getCachedUser(
-                  status.executiveOfficerServiceNo,
-                  searchUserByServiceNo,
-                );
-              } catch (e) {}
-            }
-
-            // if (status.verifyOfficerServiceNumber) {
-            //   try {
-            //     verifyOfficerData = await getCachedUser(
-            //       status.verifyOfficerServiceNumber,
-            //       searchUserByServiceNo
-            //     );
-            //   } catch (e) {}
-            // }
-            const vo =
-              status.verifyOfficerServiceNumber ||
-              status.verifyOfficerServiceNo;
-            if (vo) {
-              try {
-                verifyOfficerData = await getCachedUser(
-                  vo,
-                  searchUserByServiceNo,
-                );
-              } catch (e) {}
-            }
-
-            return {
-              refNo: status.referenceNumber,
-              senderDetails: senderDetails,
-              receiverDetails: receiverDetails,
-              transportData: status.request?.transport,
-              loadingDetails: loadingDetails,
-              inLocation: status.request?.inLocation,
-              outLocation: status.request?.outLocation,
-              createdAt: new Date(status.createdAt).toLocaleString(),
-              items: status.request?.items || [],
-              comment:
-                status.comment ||
-                status.verifyOfficerComment ||
-                status.dispatchComment ||
-                "",
-              requestDetails: { ...status.request },
-              loadUserData: loadUserData,
-              statusDetails: status,
-              executiveOfficerData: exerctiveOfficerData,
-              verifyOfficerData: verifyOfficerData,
-            };
-          }),
-        );
-
-        const uniqueDESCRIPTIONs = formattedData.reduce((acc, item) => {
-          const existing = acc.find((x) => x.refNo === item.refNo);
-          if (!existing) {
-            acc.push(item);
-          } else {
-            const existingDate = new Date(existing.createdAt);
-            const currentDate = new Date(item.createdAt);
-            if (currentDate > existingDate) {
-              const index = acc.findIndex((x) => x.refNo === item.refNo);
-              acc[index] = item;
-            }
-          }
-          return acc;
-        }, []);
-
-        setpendingItems(uniqueDESCRIPTIONs);
-      } catch (error) {
-        console.error("Error fetching pending statuses:", error);
-      }
-    },
-    [activeTab, user],
-    { status: 4 }, // Dispatch/Petrol Leader pending requests
-  );
 
   // --- Data Fetching Effects ---
 
@@ -2748,9 +2969,7 @@ const RequestDetailsModal = ({
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
                   <FaBoxOpen className="mr-2" /> item Details
                   <button
-                    onClick={() =>
-                      generateitemDetailsPDF(request.items, request.refNo)
-                    }
+                    onClick={() => generateitemDetailsPDF(request)}
                     className="ml-auto px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center transition-colors"
                   >
                     <FaFilePdf className="mr-2" /> Download items PDF
