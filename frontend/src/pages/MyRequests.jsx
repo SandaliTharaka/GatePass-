@@ -61,7 +61,7 @@ const StatusPill = ({ statusCode, onClick, referenceNumber }) => {
       return `${baseStyles} bg-emerald-100 text-emerald-800`;
     if (status.includes("Rejected"))
       return `${baseStyles} bg-rose-100 text-rose-800`;
-    if (status === "Canceled") return `${baseStyles} bg-gray-100 text-gray-800`;
+    if (status === "Canceled") return `${baseStyles} bg-rose-100 text-rose-800`;
     return `${baseStyles} bg-gray-100 text-gray-800`;
   };
 
