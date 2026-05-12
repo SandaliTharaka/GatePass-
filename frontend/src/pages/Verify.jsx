@@ -181,7 +181,7 @@ const Verify = () => {
   const isSuperAdmin = role === "SUPERADMIN";
 
   // Add states for loading/unloading details
-  const [staffType, setStaffType] = useState("");
+  const [staffType, setStaffType] = useState("SLT");
   const [serviceId, setServiceId] = useState("");
   const [searchedEmployee, setSearchedEmployee] = useState(null);
 
@@ -1533,6 +1533,11 @@ const Verify = () => {
   // UPDATED: handleApprove function to use consolidated email function
   const handleApprove = async (item) => {
     try {
+      if (!["SLT", "Non-SLT"].includes(staffType)) {
+        showToast("Please select SLT or Non-SLT loading staff", "warning");
+        return;
+      }
+
       // Prepare loading details based on staff type
       let loadingDetails = {
         loadingLocation: item.outLocation,
@@ -4446,7 +4451,7 @@ const RequestDetailsModal = ({
                 <div className="flex space-x-4 mb-6">
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "slt"
+                      staffType === "SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
@@ -4456,7 +4461,7 @@ const RequestDetailsModal = ({
                   </button>
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "non-slt"
+                      staffType === "Non-SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
