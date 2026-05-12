@@ -71,6 +71,17 @@ const validateNonSLTLoadingStaff = (data) => {
   return errors;
 };
 
+const normalizeLoadingStaffType = (staffType) => {
+  const normalized = String(staffType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+
+  if (normalized === "slt") return "SLT";
+  if (normalized === "non-slt" || normalized === "nonslt") return "Non-SLT";
+  return "";
+};
+
 // ---------------- helpers ----------------
 const normalizeRole = (r) =>
   String(r || "")
@@ -479,11 +490,16 @@ exports.updateApproved = async (req, res) => {
 
     // ✅ Validate non-SLT loading staff if applicable
     const validationErrors = [];
-    if (
-      loadingDetails &&
-      loadingDetails.staffType &&
-      loadingDetails.staffType !== "SLT"
-    ) {
+    if (loadingDetails) {
+      loadingDetails.staffType = normalizeLoadingStaffType(
+        loadingDetails.staffType,
+      );
+      if (!loadingDetails.staffType) {
+        validationErrors.push("Loading staff type must be SLT or Non-SLT");
+      }
+    }
+
+    if (loadingDetails && loadingDetails.staffType === "Non-SLT") {
       const nonSltErrors = validateNonSLTLoadingStaff({
         nonSLTStaffName: loadingDetails.nonSLTStaffName,
         nonSLTStaffCompany: loadingDetails.nonSLTStaffCompany,
@@ -630,7 +646,7 @@ exports.updateApproved = async (req, res) => {
 
     // Email Petrol Leader (Dispatch) at IN-location for dispatch approval
     try {
-      const pleader = await findPetrolLeaderForInLocation(inLocation);
+      const pleader = await findPetrolLeaderForInLocation(inLocationName);
       if (pleader && pleader.email) {
         const subject = `Gate Pass ready for dispatch approval: ${referenceNumber}`;
         const html = `
@@ -658,6 +674,12 @@ exports.updateApproved = async (req, res) => {
     return res.json(fresh);
   } catch (err) {
     console.error("Verifier approve error:", err);
+    if (err?.name === "ValidationError") {
+      return res.status(400).json({
+        message: err.message,
+        errors: Object.values(err.errors || {}).map((e) => e.message),
+      });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };
