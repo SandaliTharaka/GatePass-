@@ -7,6 +7,10 @@ const {
   emitRequestApproval,
   emitRequestRejection,
 } = require("../utils/socketEmitter");
+const {
+  validateApprovalAction,
+  validateSerialNumbers,
+} = require("../utils/validators");
 
 // Helper to find receiver/dispatcher for a location
 async function findReceiverForInLocation(inLocation) {
@@ -101,7 +105,9 @@ const getLatestDispatchStatuses = async () => {
     }
 
     if (r2 === r1) {
-      const t1 = new Date(current.updatedAt || current.createdAt || 0).getTime();
+      const t1 = new Date(
+        current.updatedAt || current.createdAt || 0,
+      ).getTime();
       const t2 = new Date(s.updatedAt || s.createdAt || 0).getTime();
       if (t2 > t1) pickByRef.set(key, s);
     }
@@ -305,6 +311,7 @@ const updateApproved = async (req, res) => {
       }
 
       // No email needed - this is the final step for Non-SLT
+      await newStatus.populate("request");
       return res.status(200).json({ ok: true, status: newStatus });
     }
 
@@ -344,6 +351,7 @@ const updateApproved = async (req, res) => {
         );
       }
 
+      await newStatus.populate("request");
       return res.status(200).json({ ok: true, status: newStatus });
     } else {
       // Receiver is available, route to specific receiver
@@ -388,6 +396,7 @@ const updateApproved = async (req, res) => {
         console.error("Email (Dispatch→Receiver) failed:", mailErr);
       }
 
+      await newStatus.populate("request");
       return res.status(200).json({ ok: true, status: newStatus });
     }
   } catch (error) {
@@ -404,10 +413,13 @@ const updateRejected = async (req, res) => {
     const { referenceNumber } = req.params;
     const { comment } = req.body;
 
-    if (!comment || !comment.trim()) {
-      return res
-        .status(400)
-        .json({ message: "Rejection comment is required." });
+    // ✅ VALIDATION: Validate rejection action
+    const validation = validateApprovalAction({ comment }, "reject");
+    if (!validation.isValid) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: validation.errors,
+      });
     }
 
     const latest = await Status.findOne({ referenceNumber })
@@ -493,15 +505,12 @@ const markItemsAsReturned = async (req, res) => {
       remarks,
     });
 
-    // Validation
-    if (
-      !serialNumbers ||
-      !Array.isArray(serialNumbers) ||
-      serialNumbers.length === 0
-    ) {
+    // ✅ VALIDATION: Validate serial numbers
+    const validation = validateSerialNumbers(serialNumbers);
+    if (!validation.isValid) {
       return res.status(400).json({
-        success: false,
-        message: "Serial numbers are required and must be a non-empty array",
+        error: "Validation failed",
+        details: validation.errors,
       });
     }
 

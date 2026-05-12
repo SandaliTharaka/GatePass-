@@ -1,11 +1,7 @@
-import axios from "axios";
 import axiosInstance from "./axiosConfig";
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL;
-
-const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-});
+const isLikelyServiceNo = (value) =>
+  /^\d+$/.test(String(value || "").trim());
 
 // Create a new status
 export const createStatus = async (statusData) => {
@@ -74,10 +70,15 @@ export const rejectStatus = async (referenceNumber, comment) => {
 };
 
 export const searchUserByServiceNo = async (serviceNo) => {
-  if (!serviceNo) throw new Error("Service number is required");
+  const normalizedServiceNo = String(serviceNo || "").trim();
+  if (!normalizedServiceNo || !isLikelyServiceNo(normalizedServiceNo)) {
+    return null;
+  }
 
   try {
-    const response = await axiosInstance.get(`/users/${serviceNo}`);
+    const response = await axiosInstance.get(
+      `/users/${encodeURIComponent(normalizedServiceNo)}`,
+    );
     return response.data;
   } catch (error) {
     if (error.response?.status === 404) {
@@ -100,19 +101,13 @@ export const markItemsAsReturned = async (
     }
 
     console.log(
-      `Calling API: ${API_BASE_URL}/approve/${referenceNumber}/mark-returned`
+      `Calling API: /approve/${referenceNumber}/mark-returned`
     );
     console.log("Payload:", payload);
 
-    const response = await axios.put(
-      `${API_BASE_URL}/approve/${referenceNumber}/mark-returned`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await axiosInstance.put(
+      `/approve/${referenceNumber}/mark-returned`,
+      payload
     );
 
     console.log("API Response:", response.data);

@@ -28,7 +28,23 @@ import { FileSpreadsheet } from "lucide-react";
 import {
   useItemCategories,
   useItemBySerialNumber,
-} from "../hooks/useIntranetData.js";
+} from "../hooks/useItemHolidayApiData.js";
+import {
+  validateVehicleNumber,
+  sanitizeVehicleNumberInput,
+  validateCompanyName,
+  validateNIC,
+  sanitizeNICInput,
+  sanitizePhoneInput,
+  sanitizeLettersOnlyInput,
+  sanitizeSerialNumberInput,
+  validatePhone,
+  validateEmail,
+  validateName,
+  validateAddress,
+  validateSerialNumber,
+  validateServiceNumber,
+} from "../utils/validators.js";
 
 const NewRequest = () => {
   const [user, setUser] = useState(null);
@@ -51,8 +67,8 @@ const NewRequest = () => {
   const [erpLocations, setErpLocations] = useState([]);
   const { showToast } = useToast();
 
-  // Use intranet API for categories
-  const { categories: intranetCategories, loading: categoriesLoading } =
+  // Use ERP GatePass API for categories
+  const { categories: apiCategories, loading: categoriesLoading } =
     useItemCategories();
 
   const [currentItem, setCurrentItem] = useState({
@@ -96,6 +112,23 @@ const NewRequest = () => {
   });
   const [erpFingerLocation, setErpFingerLocation] = useState(null);
   const [receiverFingerLocation, setReceiverFingerLocation] = useState(null);
+
+  // Validation errors
+  const [vehicleNumberError, setVehicleNumberError] = useState("");
+  const [companyNameError, setCompanyNameError] = useState("");
+  const [companyAddressError, setCompanyAddressError] = useState("");
+  const [receiverNICError, setReceiverNICError] = useState("");
+  const [receiverNameError, setReceiverNameError] = useState("");
+  const [receiverContactError, setReceiverContactError] = useState("");
+  const [nonSLTTransporterNameError, setNonSLTTransporterNameError] =
+    useState("");
+  const [nonSLTTransporterNICError, setNonSLTTransporterNICError] =
+    useState("");
+  const [nonSLTTransporterPhoneError, setNonSLTTransporterPhoneError] =
+    useState("");
+  const [nonSLTTransporterEmailError, setNonSLTTransporterEmailError] =
+    useState("");
+  const [serialNumberError, setSerialNumberError] = useState("");
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("user"));
@@ -284,46 +317,99 @@ const NewRequest = () => {
   }, [receiverServiceNo]);
 
   // Categories are now fetched via useItemCategories hook
+  const allowedImageMimeTypes = new Set([
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+  ]);
+  const maxImageSizeBytes = 5 * 1024 * 1024;
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
-    if (currentItem.images.length + files.length > 5) {
-      showToast("Maximum 5 photos allowed per item", "warning");
+    if (files.length === 0) {
       return;
     }
-    setCurrentItem({
-      ...currentItem,
-      images: [...currentItem.images, ...files],
-    });
+
+    const invalidTypeFiles = files.filter(
+      (file) => !allowedImageMimeTypes.has(file.type),
+    );
+    if (invalidTypeFiles.length > 0) {
+      showToast(
+        "Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.",
+        "warning",
+      );
+      e.target.value = "";
+      return;
+    }
+
+    const oversizedFiles = files.filter((file) => file.size > maxImageSizeBytes);
+    if (oversizedFiles.length > 0) {
+      showToast("Each image must be 5MB or smaller", "warning");
+      e.target.value = "";
+      return;
+    }
+
+    const remainingSlots = Math.max(0, 5 - currentItem.images.length);
+    if (remainingSlots <= 0) {
+      showToast("Maximum 5 photos allowed per item (minimum 2 required)", "warning");
+      e.target.value = "";
+      return;
+    }
+
+    if (files.length > remainingSlots) {
+      showToast(`Cannot add ${files.length} photos. Only ${remainingSlots} more photo(s) can be added`, "warning");
+      e.target.value = "";
+      return;
+    }
+
+    setCurrentItem((prev) => ({
+      ...prev,
+      images: [...prev.images, ...files],
+    }));
+
+    // Reset so selecting the same file again still triggers onChange.
+    e.target.value = "";
   };
 
   // Auto-search for item by serial number
   const handleSerialNumberLookup = async (serialNumber) => {
-    if (!serialNumber || serialNumber.length < 3) {
+    const serialError = validateSerialNumber(serialNumber);
+    if (serialError) {
       return;
     }
 
     setIsSearchingItem(true);
     try {
       const { getItemBySerialNumber } =
-        await import("../services/intranetService.js");
+        await import("../services/itemHolidayApiService.js");
       const itemData = await getItemBySerialNumber(serialNumber);
+
+      console.log("Item data received in frontend:", itemData);
 
       // Populate form with API data
       setCurrentItem((prev) => ({
         ...prev,
         serialNumber: serialNumber,
-        itemCode: itemData.itemCode,
-        itemDescription: itemData.itemDescription,
-        itemCategory: itemData.itemCategory,
-        categoryDescription: itemData.categoryDescription,
+        itemCode: itemData.itemCode || "",
+        itemDescription: itemData.itemDescription || "",
+        itemCategory: itemData.itemCategory || "",
+        categoryDescription: itemData.categoryDescription || itemData.itemCategory || "",
         qty: prev.qty || 1,
         returnable: prev.returnable || "No",
         images: prev.images || [],
         returnDate: prev.returnDate || "",
       }));
 
-      showToast("Item found and auto-filled", "success");
+      console.log("Current item after update:", {
+        serialNumber: serialNumber,
+        itemCode: itemData.itemCode,
+        itemDescription: itemData.itemDescription,
+        itemCategory: itemData.itemCategory,
+        categoryDescription: itemData.categoryDescription,
+      });
+
     } catch (error) {
       console.error("Error fetching item:", error);
       // Silently fail - user can fill manually
@@ -352,6 +438,12 @@ const NewRequest = () => {
     // Validate return date if returnable is Yes
     if (currentItem.returnable === "Yes" && !currentItem.returnDate) {
       showToast("Please select a return date for returnable items", "warning");
+      return;
+    }
+
+    // Validate images: minimum 2, maximum 5
+    if (currentItem.images.length < 2) {
+      showToast("Please upload at least 2 images for the item", "warning");
       return;
     }
 
@@ -415,8 +507,16 @@ const NewRequest = () => {
   };
 
   const handleSearchReceiver = async () => {
-    if (!receiverServiceNo.trim()) {
+    const normalizedReceiverServiceNo = receiverServiceNo.trim();
+
+    if (!normalizedReceiverServiceNo) {
       showToast("Please enter a service number", "warning");
+      return;
+    }
+
+    const serviceNoError = validateServiceNumber(normalizedReceiverServiceNo);
+    if (serviceNoError) {
+      showToast(serviceNoError, "warning");
       return;
     }
 
@@ -425,7 +525,7 @@ const NewRequest = () => {
       const response = await axiosInstance.post("/erp/employee-details", {
         organizationID: "string",
         costCenterCode: "string",
-        employeeNo: receiverServiceNo.trim(),
+        employeeNo: normalizedReceiverServiceNo,
       });
 
       if (response.data && response.data.success && response.data.data) {
@@ -461,6 +561,9 @@ const NewRequest = () => {
         };
 
         setReceiverDetails(receiverData);
+        if (receiverData.serviceNo) {
+          setReceiverServiceNo(String(receiverData.serviceNo).trim());
+        }
 
         if (empData.fingerScanLocation) {
           setReceiverFingerLocation(empData.fingerScanLocation.trim());
@@ -474,6 +577,9 @@ const NewRequest = () => {
           const data = await searchReceiverByServiceNo(receiverServiceNo);
           if (data) {
             setReceiverDetails(data);
+            if (data.serviceNo) {
+              setReceiverServiceNo(String(data.serviceNo).trim());
+            }
             showToast("Receiver details loaded from database", "success");
           } else {
             setReceiverDetails(null);
@@ -490,6 +596,9 @@ const NewRequest = () => {
         const data = await searchReceiverByServiceNo(receiverServiceNo);
         if (data) {
           setReceiverDetails(data);
+          if (data.serviceNo) {
+            setReceiverServiceNo(String(data.serviceNo).trim());
+          }
           showToast("Receiver details loaded from database", "success");
         } else {
           setReceiverDetails(null);
@@ -619,6 +728,28 @@ const NewRequest = () => {
         return;
       }
 
+      // ⭐ VALIDATION 3: Check for any validation errors
+      const hasValidationErrors =
+        vehicleNumberError ||
+        companyNameError ||
+        companyAddressError ||
+        receiverNICError ||
+        receiverNameError ||
+        receiverContactError ||
+        nonSLTTransporterNameError ||
+        nonSLTTransporterNICError ||
+        nonSLTTransporterPhoneError ||
+        nonSLTTransporterEmailError ||
+        serialNumberError;
+
+      if (hasValidationErrors) {
+        showToast(
+          "Please fix all validation errors before submitting",
+          "error",
+        );
+        return;
+      }
+
       // Common validation - outLocation is required for both SLT and Non-SLT
       if (!outLocation.trim()) {
         showToast(
@@ -645,9 +776,56 @@ const NewRequest = () => {
           return;
         }
 
+        // Check company name validation error
+        const companyError = validateCompanyName(companyName);
+        if (companyError) {
+          showToast(companyError, "warning");
+          return;
+        }
+
         if (!companyAddress.trim()) {
           showToast("Please enter company/organization address", "warning");
           return;
+        }
+
+        // Check company address validation error
+        const addressError = validateAddress(companyAddress);
+        if (addressError) {
+          showToast(addressError, "warning");
+          return;
+        }
+
+        // Validate receiver details if provided for Non-SLT
+        if (receiverNIC.trim() || receiverName.trim() || receiverContact.trim()) {
+          // If any receiver field is filled, validate all required fields
+          if (!receiverNIC.trim() || !receiverName.trim() || !receiverContact.trim()) {
+            showToast(
+              "Please fill in all receiver details (NIC, Name, and Contact)",
+              "warning"
+            );
+            return;
+          }
+
+          // Validate NIC format
+          const nicError = validateNIC(receiverNIC);
+          if (nicError) {
+            showToast(nicError, "warning");
+            return;
+          }
+
+          // Validate name format
+          const nameError = validateName(receiverName);
+          if (nameError) {
+            showToast(nameError, "warning");
+            return;
+          }
+
+          // Validate contact format
+          const contactError = validatePhone(receiverContact);
+          if (contactError) {
+            showToast(contactError, "warning");
+            return;
+          }
         }
       }
 
@@ -679,8 +857,45 @@ const NewRequest = () => {
           return;
         }
 
+        // Validate Non-SLT transporter details
+        if (transporterType === "Non-SLT") {
+          const nameError = validateName(nonSLTTransporterName);
+          if (nameError) {
+            showToast(nameError, "warning");
+            return;
+          }
+
+          const nicError = validateNIC(nonSLTTransporterNIC);
+          if (nicError) {
+            showToast(nicError, "warning");
+            return;
+          }
+
+          const phoneError = validatePhone(nonSLTTransporterPhone);
+          if (phoneError) {
+            showToast(phoneError, "warning");
+            return;
+          }
+
+          // Email is optional but validate if provided
+          if (nonSLTTransporterEmail.trim()) {
+            const emailError = validateEmail(nonSLTTransporterEmail);
+            if (emailError) {
+              showToast(emailError, "warning");
+              return;
+            }
+          }
+        }
+
         if (!vehicleNumber || !vehicleModel) {
           showToast("Please fill in all vehicle details", "warning");
+          return;
+        }
+
+        // Check vehicle number validation error
+        const vehicleError = validateVehicleNumber(vehicleNumber);
+        if (vehicleError) {
+          showToast(vehicleError, "warning");
           return;
         }
       }
@@ -702,6 +917,36 @@ const NewRequest = () => {
         ) {
           showToast("Please fill in all required carrier details", "warning");
           return;
+        }
+
+        // Validate Non-SLT carrier details
+        if (transporterType === "Non-SLT") {
+          const nameError = validateName(nonSLTTransporterName);
+          if (nameError) {
+            showToast(nameError, "warning");
+            return;
+          }
+
+          const nicError = validateNIC(nonSLTTransporterNIC);
+          if (nicError) {
+            showToast(nicError, "warning");
+            return;
+          }
+
+          const phoneError = validatePhone(nonSLTTransporterPhone);
+          if (phoneError) {
+            showToast(phoneError, "warning");
+            return;
+          }
+
+          // Email is optional but validate if provided
+          if (nonSLTTransporterEmail.trim()) {
+            const emailError = validateEmail(nonSLTTransporterEmail);
+            if (emailError) {
+              showToast(emailError, "warning");
+              return;
+            }
+          }
         }
       }
 
@@ -791,7 +1036,24 @@ const NewRequest = () => {
         }
       }
 
-      const itemsWithFileNames = items.map((item) => ({
+      const itemUploadBatches = items.map((item, itemIndex) => {
+        const imageUploads = (item.images || []).map((image, imageIndex) => {
+          const extIndex = image.name.lastIndexOf(".");
+          const ext = extIndex >= 0 ? image.name.slice(extIndex) : "";
+          const uploadKey = `item-${itemIndex}-${imageIndex}-${Date.now()}-${Math.floor(Math.random() * 1e6)}${ext}`;
+          return {
+            image,
+            uploadKey,
+          };
+        });
+
+        return {
+          item,
+          imageUploads,
+        };
+      });
+
+      const itemsWithFileNames = itemUploadBatches.map(({ item, imageUploads }) => ({
         serialNumber: item.serialNumber,
         itemCode: item.itemCode || "",
         itemDescription: item.itemDescription,
@@ -800,15 +1062,15 @@ const NewRequest = () => {
         itemReturnable: item.returnable === "Yes",
         itemQuantity: parseInt(item.qty) || 1,
         returnDate: item.returnDate || null,
-        originalFileNames: item.images.map((img) => img.name),
+        originalFileNames: imageUploads.map(({ uploadKey }) => uploadKey),
       }));
 
       formData.append("items", JSON.stringify(itemsWithFileNames));
 
-      // ⭐ Add images in order per item
-      items.forEach((item) => {
-        item.images.forEach((image) => {
-          formData.append("itemPhotos", image);
+      // Add images using deterministic upload keys to avoid filename collisions.
+      itemUploadBatches.forEach(({ imageUploads }) => {
+        imageUploads.forEach(({ image, uploadKey }) => {
+          formData.append("itemPhotos", image, uploadKey);
         });
       });
 
@@ -917,19 +1179,19 @@ const NewRequest = () => {
   const statsData = [
     {
       title: "Total Items",
-      value: items.length,
+      value: userStats.totalItems,
       icon: Package,
       color: "from-amber-500 to-orange-500",
     },
     {
       title: "Returnable Items",
-      value: items.filter((item) => item.returnable === "Yes").length,
+      value: userStats.returnableItems,
       icon: UserCheck,
       color: "from-emerald-500 to-green-500",
     },
     {
       title: "Non-Returnable",
-      value: items.filter((item) => item.returnable === "No").length,
+      value: userStats.nonReturnableItems,
       icon: Info,
       color: "from-rose-500 to-red-500",
     },
@@ -987,6 +1249,11 @@ const NewRequest = () => {
           !item.categoryDescription
         )
           continue;
+
+        const serialError = validateSerialNumber(item.serialNumber);
+        if (serialError) {
+          continue;
+        }
 
         // Convert returnable to Yes/No format
         if (item.returnable) {
@@ -1209,7 +1476,15 @@ const NewRequest = () => {
                     name="destinationType"
                     value="slt"
                     checked={destinationType === "slt"}
-                    onChange={(e) => setDestinationType(e.target.value)}
+                    onChange={(e) => {
+                      setDestinationType(e.target.value);
+                      // Clear validation errors when switching destination types
+                      setCompanyNameError("");
+                      setCompanyAddressError("");
+                      setReceiverNICError("");
+                      setReceiverNameError("");
+                      setReceiverContactError("");
+                    }}
                     className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="ml-2 text-gray-700">SLT Branch</span>
@@ -1221,7 +1496,15 @@ const NewRequest = () => {
                     name="destinationType"
                     value="non-slt"
                     checked={destinationType === "non-slt"}
-                    onChange={(e) => setDestinationType(e.target.value)}
+                    onChange={(e) => {
+                      setDestinationType(e.target.value);
+                      // Clear validation errors when switching destination types
+                      setCompanyNameError("");
+                      setCompanyAddressError("");
+                      setReceiverNICError("");
+                      setReceiverNameError("");
+                      setReceiverContactError("");
+                    }}
                     className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span className="ml-2 text-gray-700">
@@ -1249,14 +1532,14 @@ const NewRequest = () => {
                       <input
                         type="text"
                         value={receiverServiceNo}
-                        onChange={(e) => setReceiverServiceNo(e.target.value)}
+                        onChange={(e) => setReceiverServiceNo(e.target.value.replace(/[^0-9]/g, ''))}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
                             handleSearchReceiver(); // SAME as Search button
                           }
                         }}
-                        placeholder="Enter receiver's service number"
+                        placeholder="Enter receiver's   service number"
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
                       />
                       <button
@@ -1308,39 +1591,83 @@ const NewRequest = () => {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Receiver NIC
+                        Receiver NIC <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={receiverNIC}
-                        onChange={(e) => setReceiverNIC(e.target.value)}
+                        maxLength={12}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          setReceiverNIC(value);
+                          const error = validateNIC(value);
+                          setReceiverNICError(error);
+                        }}
+                        onBlur={(e) => {
+                          const error = validateNIC(e.target.value);
+                          setReceiverNICError(error);
+                        }}
                         placeholder="Enter receiver's NIC number"
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                          receiverNICError ? "border-red-500" : "border-gray-200"
+                        }`}
                       />
+                      {receiverNICError && (
+                        <p className="mt-1 text-sm text-red-600">{receiverNICError}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Receiver Name
+                        Receiver Name <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={receiverName}
-                        onChange={(e) => setReceiverName(e.target.value)}
+                        onChange={(e) => {
+                          const value = sanitizeLettersOnlyInput(e.target.value);
+                          setReceiverName(value);
+                          const error = validateName(value);
+                          setReceiverNameError(error);
+                        }}
+                        onBlur={(e) => {
+                          const error = validateName(e.target.value);
+                          setReceiverNameError(error);
+                        }}
                         placeholder="Enter receiver's full name"
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                          receiverNameError ? "border-red-500" : "border-gray-200"
+                        }`}
                       />
+                      {receiverNameError && (
+                        <p className="mt-1 text-sm text-red-600">{receiverNameError}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Receiver Contact Number
+                        Receiver Contact Number <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={receiverContact}
-                        onChange={(e) => setReceiverContact(e.target.value)}
+                        maxLength={12}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          setReceiverContact(value);
+                          const error = validatePhone(value);
+                          setReceiverContactError(error);
+                        }}
+                        onBlur={(e) => {
+                          const error = validatePhone(e.target.value);
+                          setReceiverContactError(error);
+                        }}
                         placeholder="Enter receiver's contact number"
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                          receiverContactError ? "border-red-500" : "border-gray-200"
+                        }`}
                       />
+                      {receiverContactError && (
+                        <p className="mt-1 text-sm text-red-600">{receiverContactError}</p>
+                      )}
                     </div>
                   </>
                 )}
@@ -1435,23 +1762,47 @@ const NewRequest = () => {
                     <input
                       type="text"
                       value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCompanyName(value);
+                        const error = validateCompanyName(value);
+                        setCompanyNameError(error);
+                      }}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                        companyNameError ? "border-red-500" : "border-gray-200"
+                      }`}
                       placeholder="Enter company name"
                     />
+                    {companyNameError && (
+                      <p className="mt-1 text-sm text-red-600">{companyNameError}</p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">
-                      Company / Organization Address
+                      Company / Organization Address <span className="text-red-500">*</span>
                     </label>
                     <textarea
                       rows="3"
                       value={companyAddress}
-                      onChange={(e) => setCompanyAddress(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCompanyAddress(value);
+                        const error = validateAddress(value);
+                        setCompanyAddressError(error);
+                      }}
+                      onBlur={(e) => {
+                        const error = validateAddress(e.target.value);
+                        setCompanyAddressError(error);
+                      }}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                        companyAddressError ? "border-red-500" : "border-gray-200"
+                      }`}
                       placeholder="Enter company address"
                     />
+                    {companyAddressError && (
+                      <p className="mt-1 text-sm text-red-600">{companyAddressError}</p>
+                    )}
                   </div>
                 </>
               )}
@@ -1551,28 +1902,42 @@ const NewRequest = () => {
                         )}
                       </label>
                       <input
-                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                          serialNumberError ? "border-red-500" : "border-gray-200"
+                        }`}
                         type="text"
                         value={currentItem.serialNumber}
                         onChange={(e) => {
-                          const serialNumber = e.target.value;
+                          const serialNumber = sanitizeSerialNumberInput(
+                            e.target.value,
+                          );
                           setCurrentItem({
                             ...currentItem,
                             serialNumber: serialNumber,
                           });
+                          // Validate in real-time while user types
+                          setSerialNumberError(validateSerialNumber(serialNumber));
                           // Auto-lookup after user stops typing (debounced)
-                          if (serialNumber.length >= 3) {
+                          if (serialNumber.trim()) {
                             clearTimeout(window.serialLookupTimeout);
                             window.serialLookupTimeout = setTimeout(() => {
                               handleSerialNumberLookup(serialNumber.trim());
                             }, 800);
                           }
                         }}
+                        onBlur={(e) => {
+                          const error = validateSerialNumber(e.target.value);
+                          setSerialNumberError(error);
+                        }}
                         placeholder="Enter serial number"
                       />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Type serial number - details will auto-fill if found
-                      </p>
+                      {serialNumberError ? (
+                        <p className="mt-1 text-sm text-red-600">{serialNumberError}</p>
+                      ) : (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Type serial number - details will auto-fill if found
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-2">
@@ -1629,8 +1994,9 @@ const NewRequest = () => {
                         <option value="">Select category</option>
                         {categoriesLoading ? (
                           <option disabled>Loading categories...</option>
-                        ) : intranetCategories.length > 0 ? (
-                          intranetCategories
+                        ) : apiCategories.length > 0 ? (
+                          apiCategories
+                            .filter((cat) => cat && typeof cat === "string")
                             .sort((a, b) => a.localeCompare(b))
                             .map((category, idx) => (
                               <option key={idx} value={category}>
@@ -1726,7 +2092,7 @@ const NewRequest = () => {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Item Images (Up to 5)
+                        Item Images (2-5 required)
                       </label>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {currentItem.images.map((image, idx) => (
@@ -1758,7 +2124,10 @@ const NewRequest = () => {
                               type="file"
                               className="sr-only"
                               multiple
-                              accept="image/*"
+                              accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
+                              onClick={(event) => {
+                                event.target.value = "";
+                              }}
                               onChange={handleImageUpload}
                             />
                           </label>
@@ -1936,6 +2305,8 @@ const NewRequest = () => {
                           setNonSLTTransporterNIC("");
                           setNonSLTTransporterPhone("");
                           setNonSLTTransporterEmail("");
+                          // Clear validation errors
+                          setVehicleNumberError("");
                         }}
                         className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                       />
@@ -2055,59 +2426,115 @@ const NewRequest = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Carrier Name
+                          Carrier Name <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterNameError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={nonSLTTransporterName}
-                          onChange={(e) =>
-                            setNonSLTTransporterName(e.target.value)
-                          }
+                          onChange={(e) => {
+                              const value = sanitizeLettersOnlyInput(e.target.value);
+                            setNonSLTTransporterName(value);
+                            const error = validateName(value);
+                            setNonSLTTransporterNameError(error);
+                          }}
+                          onBlur={(e) => {
+                            const error = validateName(e.target.value);
+                            setNonSLTTransporterNameError(error);
+                          }}
                           placeholder="Enter carrier name"
                         />
+                        {nonSLTTransporterNameError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterNameError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
-                          NIC
+                          NIC <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterNICError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={nonSLTTransporterNIC}
-                          onChange={(e) =>
-                            setNonSLTTransporterNIC(e.target.value)
-                          }
+                          maxLength={12}
+                          onChange={(e) => {
+                            const value = sanitizeNICInput(e.target.value);
+                            setNonSLTTransporterNIC(value);
+                            const error = validateNIC(value);
+                            setNonSLTTransporterNICError(error);
+                          }}
+                          onBlur={(e) => {
+                            const error = validateNIC(e.target.value);
+                            setNonSLTTransporterNICError(error);
+                          }}
                           placeholder="Enter NIC number"
                         />
+                        {nonSLTTransporterNICError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterNICError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Phone
+                          Phone <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterPhoneError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={nonSLTTransporterPhone}
-                          onChange={(e) =>
-                            setNonSLTTransporterPhone(e.target.value)
-                          }
+                          maxLength={12}
+                          onChange={(e) => {
+                            const value = sanitizePhoneInput(e.target.value);
+                            setNonSLTTransporterPhone(value);
+                            const error = validatePhone(value);
+                            setNonSLTTransporterPhoneError(error);
+                          }}
+                          onBlur={(e) => {
+                            const error = validatePhone(e.target.value);
+                            setNonSLTTransporterPhoneError(error);
+                          }}
                           placeholder="Enter phone number"
                         />
+                        {nonSLTTransporterPhoneError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterPhoneError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
                           Email
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterEmailError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="email"
                           value={nonSLTTransporterEmail}
-                          onChange={(e) =>
-                            setNonSLTTransporterEmail(e.target.value)
-                          }
-                          placeholder="Enter email address"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setNonSLTTransporterEmail(value);
+                            if (value.trim()) {
+                              const error = validateEmail(value);
+                              setNonSLTTransporterEmailError(error);
+                            } else {
+                              setNonSLTTransporterEmailError("");
+                            }
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value.trim()) {
+                              const error = validateEmail(e.target.value);
+                              setNonSLTTransporterEmailError(error);
+                            }
+                          }}
+                          placeholder="Enter email address (optional)"
                         />
+                        {nonSLTTransporterEmailError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterEmailError}</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -2214,59 +2641,115 @@ const NewRequest = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Transporter Name
+                          Transporter Name <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterNameError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={nonSLTTransporterName}
-                          onChange={(e) =>
-                            setNonSLTTransporterName(e.target.value)
-                          }
+                          onChange={(e) => {
+                              const value = sanitizeLettersOnlyInput(e.target.value);
+                            setNonSLTTransporterName(value);
+                            const error = validateName(value);
+                            setNonSLTTransporterNameError(error);
+                          }}
+                          onBlur={(e) => {
+                            const error = validateName(e.target.value);
+                            setNonSLTTransporterNameError(error);
+                          }}
                           placeholder="Enter transporter name"
                         />
+                        {nonSLTTransporterNameError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterNameError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
-                          NIC
+                          NIC <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterNICError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={nonSLTTransporterNIC}
-                          onChange={(e) =>
-                            setNonSLTTransporterNIC(e.target.value)
-                          }
+                          maxLength={12}
+                          onChange={(e) => {
+                            const value = sanitizeNICInput(e.target.value);
+                            setNonSLTTransporterNIC(value);
+                            const error = validateNIC(value);
+                            setNonSLTTransporterNICError(error);
+                          }}
+                          onBlur={(e) => {
+                            const error = validateNIC(e.target.value);
+                            setNonSLTTransporterNICError(error);
+                          }}
                           placeholder="Enter NIC number"
                         />
+                        {nonSLTTransporterNICError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterNICError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
-                          Phone
+                          Phone <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterPhoneError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={nonSLTTransporterPhone}
-                          onChange={(e) =>
-                            setNonSLTTransporterPhone(e.target.value)
-                          }
+                          maxLength={12}
+                          onChange={(e) => {
+                            const value = sanitizePhoneInput(e.target.value);
+                            setNonSLTTransporterPhone(value);
+                            const error = validatePhone(value);
+                            setNonSLTTransporterPhoneError(error);
+                          }}
+                          onBlur={(e) => {
+                            const error = validatePhone(e.target.value);
+                            setNonSLTTransporterPhoneError(error);
+                          }}
                           placeholder="Enter phone number"
                         />
+                        {nonSLTTransporterPhoneError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterPhoneError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">
                           Email
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            nonSLTTransporterEmailError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="email"
                           value={nonSLTTransporterEmail}
-                          onChange={(e) =>
-                            setNonSLTTransporterEmail(e.target.value)
-                          }
-                          placeholder="Enter email address"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setNonSLTTransporterEmail(value);
+                            if (value.trim()) {
+                              const error = validateEmail(value);
+                              setNonSLTTransporterEmailError(error);
+                            } else {
+                              setNonSLTTransporterEmailError("");
+                            }
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value.trim()) {
+                              const error = validateEmail(e.target.value);
+                              setNonSLTTransporterEmailError(error);
+                            }
+                          }}
+                          placeholder="Enter email address (optional)"
                         />
+                        {nonSLTTransporterEmailError && (
+                          <p className="mt-1 text-sm text-red-600">{nonSLTTransporterEmailError}</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -2282,12 +2765,22 @@ const NewRequest = () => {
                           Vehicle Number
                         </label>
                         <input
-                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                            vehicleNumberError ? "border-red-500" : "border-gray-200"
+                          }`}
                           type="text"
                           value={vehicleNumber}
-                          onChange={(e) => setVehicleNumber(e.target.value)}
-                          placeholder="Enter vehicle number"
+                          onChange={(e) => {
+                            const value = sanitizeVehicleNumberInput(e.target.value);
+                            setVehicleNumber(value);
+                            const error = validateVehicleNumber(value);
+                            setVehicleNumberError(error);
+                          }}
+                          placeholder="Enter vehicle number (e.g., CAA 1234, 32-1234 or 121234)"
                         />
+                        {vehicleNumberError && (
+                          <p className="mt-1 text-sm text-red-600">{vehicleNumberError}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">

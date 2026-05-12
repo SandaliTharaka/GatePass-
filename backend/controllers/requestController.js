@@ -4,6 +4,8 @@ const { uploadImage, getImage } = require("../utils/imageUpload");
 const { emitNewRequest } = require("../utils/socketEmitter");
 const ErpLocation = require("../models/ErpLocation");
 const { resolveLocationName } = require("../utils/locationResolver");
+const { validateRequestCreation } = require("../utils/validators");
+const { safeErrorResponse } = require("../middleware/errorHandler");
 
 async function toLocationName(raw) {
   if (!raw) return raw;
@@ -50,6 +52,16 @@ const createRequest = async (req, res) => {
       vehicleModel,
     } = req.body;
 
+    // ✅ VALIDATION: Validate request data
+    const validation = validateRequestCreation(req.body);
+    if (!validation.isValid) {
+      console.log("❌ Validation failed:", validation.errors);
+      return res.status(400).json({
+        error: "Validation failed",
+        details: validation.errors,
+      });
+    }
+
     const referenceNumber = `REQ-${Date.now()}-${Math.floor(
       Math.random() * 1000,
     )}`;
@@ -62,7 +74,9 @@ const createRequest = async (req, res) => {
     const inLocationName = await resolveLocationName(inLocation);
 
     // Process items with images
-    const processedItems = await processCSVItems(parsedItems, req.files);
+    const processedItems = await processCSVItems(parsedItems, req.files, {
+      requestReference: referenceNumber,
+    });
     // Process items with images
 
     console.log("Processed items:", processedItems.length);
@@ -183,16 +197,19 @@ const createRequest = async (req, res) => {
 };
 
 // ⭐ CORRECTED processCSVItems function
-const processCSVItems = async (csvItems, files) => {
+const processCSVItems = async (csvItems, files, uploadOptions = {}) => {
   // Create a map to group files by their original names if files exist
   const fileMap = {};
   if (files && files.length > 0) {
     files.forEach((file) => {
-      fileMap[file.originalname] = file;
+      if (!fileMap[file.originalname]) {
+        fileMap[file.originalname] = [];
+      }
+      fileMap[file.originalname].push(file);
     });
     console.log(
       "📎 File map created with",
-      Object.keys(fileMap).length,
+      files.length,
       "files",
     );
   }
@@ -208,11 +225,12 @@ const processCSVItems = async (csvItems, files) => {
         );
 
         for (const fileName of item.originalFileNames) {
-          const file = fileMap[fileName];
+          const fileQueue = fileMap[fileName];
+          const file = Array.isArray(fileQueue) ? fileQueue.shift() : null;
           if (file) {
             try {
               // uploadImage returns { url: '...', path: '...' }
-              const uploadedImage = await uploadImage(file, "items");
+              const uploadedImage = await uploadImage(file, "items", uploadOptions);
 
               // CRITICAL: Verify the structure before pushing
               if (uploadedImage && uploadedImage.url && uploadedImage.path) {
@@ -269,7 +287,7 @@ const getRequests = async (req, res) => {
     const requests = await Request.find();
     res.json(requests);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return safeErrorResponse(res, error, 500);
   }
 };
 
@@ -343,6 +361,10 @@ const updateRequest = async (req, res) => {
       receiverServiceNo,
     } = req.body;
 
+    const existingRequest = await Request.findById(req.params.id).select(
+      "referenceNumber",
+    );
+
     // Handle item photos upload for updated items
     const parsedItems = JSON.parse(items);
     const processedItems = await Promise.all(
@@ -353,7 +375,9 @@ const updateRequest = async (req, res) => {
             (file) => file.fieldname === `itemPhotos_${index}`,
           );
           for (const file of itemFiles) {
-            const uploadedImage = await uploadImage(file, "items");
+            const uploadedImage = await uploadImage(file, "items", {
+              requestReference: existingRequest?.referenceNumber || req.params.id,
+            });
             photos.push(uploadedImage);
           }
         }

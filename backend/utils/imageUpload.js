@@ -1,41 +1,84 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(__dirname, '../../backend/uploads/images');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log('Created uploads directory:', uploadDir);
-}
+const uploadsRootDir = path.resolve(__dirname, '..', 'uploads');
+const imagesUploadDir = path.join(uploadsRootDir, 'images');
+const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+const mimeToExt = {
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+};
+
+const ensureUploadDirectory = async () => {
+    await fs.promises.mkdir(imagesUploadDir, { recursive: true });
+};
+
+const sanitizePathSegment = (value, fallback = 'unknown') => {
+    const cleaned = String(value || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, '-');
+
+    return cleaned || fallback;
+};
+
+const getDateFolderSegment = () => {
+    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+};
+
+const getSafeExtension = (file) => {
+    const originalExt = path.extname(file?.originalname || '').toLowerCase();
+    if (allowedExtensions.has(originalExt)) {
+        return originalExt;
+    }
+
+    const mappedExt = mimeToExt[file?.mimetype];
+    if (mappedExt) {
+        return mappedExt;
+    }
+
+    return '.jpg';
+};
 
 /**
  * Upload image to local storage
  * @param {Object} file - Multer file object
  * @param {String} folder - Subfolder name (e.g., 'items')
+ * @param {Object} options - Upload options
  * @returns {Object} - Object with url and path properties matching schema
  */
-const uploadImage = async (file, folder = 'items') => {
+const uploadImage = async (file, folder = 'items', options = {}) => {
     try {
-        // Create unique filename
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const fileExtension = path.extname(file.originalname);
-        const filename = `${folder}-${uniqueSuffix}${fileExtension}`;
-        
-        // Create full path
-        const filepath = path.join(uploadDir, filename);
-        
-        // Save file to disk
-        await fs.promises.writeFile(filepath, file.buffer);
-        
-        console.log(` Image uploaded: ${filename}`);
-        
-        // CRITICAL: Return object matching your schema structure
-        // Schema expects: { url: String, path: String }
+        if (!file || !file.buffer) {
+            throw new Error('Invalid file payload');
+        }
+
+        await ensureUploadDirectory();
+
+        const safeFolder = String(folder || 'items').replace(/[^a-zA-Z0-9_-]/g, '') || 'items';
+        const safeDateFolder = sanitizePathSegment(options.dateFolder || getDateFolderSegment(), 'unknown-date');
+        const safeRequestFolder = sanitizePathSegment(
+            options.requestReference || options.requestId || 'unassigned-request',
+            'unassigned-request'
+        );
+        const targetDir = path.join(imagesUploadDir, safeDateFolder, safeRequestFolder);
+
+        await fs.promises.mkdir(targetDir, { recursive: true });
+
+        const fileExtension = getSafeExtension(file);
+        const filename = `${safeFolder}-${Date.now()}-${crypto.randomUUID()}${fileExtension}`;
+        const filepath = path.join(targetDir, filename);
+
+        await fs.promises.writeFile(filepath, file.buffer, { flag: 'wx' });
+
         const imageObject = {
-            url: `/uploads/images/${filename}`, // Relative URL for frontend
-            path: filepath // Full server path for backend operations
+            url: `/uploads/images/${safeDateFolder}/${safeRequestFolder}/${filename}`,
+            path: filepath
         };
-        
+
         return imageObject;
     } catch (error) {
         console.error('Error uploading image:', error);
@@ -75,9 +118,8 @@ const getImage = async (imageData) => {
  */
 const deleteImage = async (imageData) => {
     try {
-        // Handle both string path and object with path property
         let imagePath;
-        
+
         if (typeof imageData === 'string') {
             imagePath = imageData;
         } else if (imageData && imageData.path) {
@@ -89,11 +131,20 @@ const deleteImage = async (imageData) => {
             return false;
         }
         
-        let fullPath;
-        
-        // If it's a URL path, convert to file system path
-        if (imagePath.startsWith('/uploads')) {
-            fullPath = path.join(__dirname, '../..', imagePath);
+        let fullPath = '';
+
+        if (imagePath.startsWith('/uploads/images/')) {
+            const relativeImagePath = imagePath.replace('/uploads/images/', '');
+            const normalizedRelativePath = path.normalize(relativeImagePath);
+            const resolvedFullPath = path.resolve(imagesUploadDir, normalizedRelativePath);
+            const resolvedBaseDir = path.resolve(imagesUploadDir);
+
+            if (!resolvedFullPath.startsWith(`${resolvedBaseDir}${path.sep}`)) {
+                console.error('❌ Invalid image path outside uploads directory');
+                return false;
+            }
+
+            fullPath = resolvedFullPath;
         } else {
             fullPath = imagePath;
         }

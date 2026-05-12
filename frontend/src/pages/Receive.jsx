@@ -31,6 +31,17 @@ import {
 } from "../utils/userCache.js";
 import { useAutoRefetch } from "../hooks/useRealtimeUpdates.js";
 import {
+  validateRequired,
+  validateName,
+  validateNIC,
+  validatePhone,
+  validateEmail,
+  validateCompanyName,
+  sanitizeNICInput,
+  sanitizePhoneInput,
+  sanitizeLettersOnlyInput,
+} from "../utils/validators.js";
+import {
   FaClock,
   FaEye,
   FaUser,
@@ -169,9 +180,17 @@ const Receive = () => {
   const [staffType, setStaffType] = useState("SLT");
   const [searchedEmployee, setSearchedEmployee] = useState(null);
   const [user, setUser] = useState(null);
-  const [selectedReturnableDESCRIPTIONs, setSelectedReturnableDESCRIPTIONs] = useState([]);
+  const [selectedReturnableDESCRIPTIONs, setSelectedReturnableDESCRIPTIONs] =
+    useState([]);
   const [refetchTrigger, setRefetchTrigger] = useState(0); // Add trigger for refetching
   const [nonSltStaffDetails, setNonSltStaffDetails] = useState({
+    name: "",
+    companyName: "",
+    nic: "",
+    contactNo: "",
+    email: "",
+  });
+  const [formErrors, setFormErrors] = useState({
     name: "",
     companyName: "",
     nic: "",
@@ -199,6 +218,61 @@ const Receive = () => {
     String(userDetails.role || "")
       .replace(/[\s_-]/g, "")
       .toLowerCase() === "superadmin";
+
+  // Validation function for non-SLT employee details
+  const validateField = (field, value) => {
+    let error = "";
+
+    switch (field) {
+      case "name":
+        error = validateName(value);
+        break;
+
+      case "companyName":
+        error = validateCompanyName(value);
+        break;
+
+      case "nic":
+        error = validateNIC(value);
+        break;
+
+      case "contactNo":
+        error = validatePhone(value);
+        break;
+
+      case "email":
+        error = validateEmail(value);
+        break;
+
+      default:
+        break;
+    }
+
+    return error;
+  };
+
+  // Handle field change with real-time validation
+  const handleNonSltFieldChange = (field, value) => {
+    const sanitizedValue =
+      field === "name"
+        ? sanitizeLettersOnlyInput(value)
+        : field === "nic"
+          ? sanitizeNICInput(value)
+          : field === "contactNo"
+            ? sanitizePhoneInput(value)
+            : value;
+
+    setNonSltStaffDetails({
+      ...nonSltStaffDetails,
+      [field]: sanitizedValue,
+    });
+
+    const error = validateField(field, sanitizedValue);
+    setFormErrors({
+      ...formErrors,
+      [field]: error,
+    });
+  };
 
   // --- Safe date formatter helper (added) ---
   const fmtDate = (v) => {
@@ -584,7 +658,9 @@ const Receive = () => {
       showToast("Request received successfully", "success");
 
       // Refresh lists and close modal
-      setPendingDESCRIPTIONs((prev) => prev.filter((i) => i.refNo !== item.refNo));
+      setPendingDESCRIPTIONs((prev) =>
+        prev.filter((i) => i.refNo !== item.refNo),
+      );
       setRefetchTrigger((prev) => prev + 1);
       setShowModal(false);
       setComment("");
@@ -847,7 +923,9 @@ const Receive = () => {
       };
 
       // OPTIMISTIC UPDATE: Update UI immediately
-      setPendingDESCRIPTIONs(pendingDESCRIPTIONs.filter((i) => i.refNo !== item.refNo));
+      setPendingDESCRIPTIONs(
+        pendingDESCRIPTIONs.filter((i) => i.refNo !== item.refNo),
+      );
       setRejectedDESCRIPTIONs([rejectedDESCRIPTION, ...rejectedDESCRIPTIONs]);
 
       // Reset modal and comment immediately
@@ -1391,6 +1469,9 @@ const Receive = () => {
         staffType={staffType}
         setStaffType={setStaffType}
         isSuper={isSuper}
+        formErrors={formErrors}
+        handleNonSltFieldChange={handleNonSltFieldChange}
+        validateField={validateField}
         // user={user}
         // receiver={receiver}
       />
@@ -1421,11 +1502,16 @@ const RequestDetailsModal = ({
   setStaffType,
   staffType,
   isSuper,
+  formErrors,
+  handleNonSltFieldChange,
+  validateField,
 }) => {
   // Initialize with the correct value from request
   const [selectedExecutive, setSelectedExecutive] = useState("");
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [selectedDESCRIPTIONImages, setSelectedDESCRIPTIONImages] = useState([]);
+  const [selectedDESCRIPTIONImages, setSelectedDESCRIPTIONImages] = useState(
+    [],
+  );
   const [selecteditemDescription, setselecteditemDescription] = useState("");
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [currentTab, setCurrentTab] = useState("details");
@@ -1558,7 +1644,10 @@ const RequestDetailsModal = ({
       console.log("Selected item details:", selecteditemDetails);
 
       // Call backend to update DB
-      const response = await markItemsAsReturned(request.refNo, selectedDESCRIPTIONs);
+      const response = await markItemsAsReturned(
+        request.refNo,
+        selectedDESCRIPTIONs,
+      );
 
       console.log("Backend response:", response);
 
@@ -1603,7 +1692,11 @@ const RequestDetailsModal = ({
       return;
     }
 
-    if (!newItem.itemDescription || !newItem.serialNumber || !newItem.categoryDescription) {
+    if (
+      !newItem.itemDescription ||
+      !newItem.serialNumber ||
+      !newItem.categoryDescription
+    ) {
       alert(
         "Please fill in all required fields (item Name, Serial Number, Category)",
       );
@@ -1647,10 +1740,13 @@ const RequestDetailsModal = ({
     try {
       setLoading(true);
 
-      const data = await markItemsAsReturned(request.refNo, [item.serialNumber]);
+      const data = await markItemsAsReturned(request.refNo, [
+        item.serialNumber,
+      ]);
 
       toast.success(
-        data.message || `${item.itemDescription} marked as returned successfully`,
+        data.message ||
+          `${item.itemDescription} marked as returned successfully`,
       );
 
       setRequest((prev) => ({
@@ -1685,6 +1781,15 @@ const RequestDetailsModal = ({
       setCurrentTab(tabOrder[currentIndex - 1]);
     }
   };
+
+  const isNonSltLoadingStepInvalid =
+    currentTab === "loading" &&
+    staffType === "Non-SLT" &&
+    (!nonSltStaffDetails.name?.trim() ||
+      !nonSltStaffDetails.companyName?.trim() ||
+      !nonSltStaffDetails.nic?.trim() ||
+      !nonSltStaffDetails.contactNo?.trim() ||
+      !nonSltStaffDetails.email?.trim());
 
   // Functions for returnable items editing
   const handleEditReturnableDESCRIPTION = (item) => {
@@ -3012,7 +3117,8 @@ const RequestDetailsModal = ({
                     <thead>
                       <tr className="bg-gray-50">
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          item </th>
+                          item{" "}
+                        </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Serial Number
                         </th>
@@ -3038,7 +3144,9 @@ const RequestDetailsModal = ({
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4">{item?.itemDescription}</td>
                           <td className="px-6 py-4">{item?.serialNumber}</td>
-                          <td className="px-6 py-4">{item?.categoryDescription}</td>
+                          <td className="px-6 py-4">
+                            {item?.categoryDescription}
+                          </td>
                           <td className="px-6 py-4">{item?.itemQuantity}</td>
                           <td className="px-6 py-4">{item?.itemCode}</td>
                           <td className="px-6 py-4">
@@ -3598,17 +3706,23 @@ const RequestDetailsModal = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Name
                         </label>
+                        {formErrors.name && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.name}
+                          </p>
+                        )}
                         <input
                           type="text"
-                          disabled={isSuper}
+                           disabled={isSuper}
                           value={nonSltStaffDetails.name}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              name: e.target.value,
-                            })
+                            handleNonSltFieldChange("name", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.name
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
                           placeholder="Enter name"
                         />
                       </div>
@@ -3616,17 +3730,26 @@ const RequestDetailsModal = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Company Name
                         </label>
+                        {formErrors.companyName && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.companyName}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuper}
                           value={nonSltStaffDetails.companyName}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              companyName: e.target.value,
-                            })
+                            handleNonSltFieldChange(
+                              "companyName",
+                              e.target.value,
+                            )
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.companyName
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
                           placeholder="Enter company name"
                         />
                       </div>
@@ -3634,54 +3757,72 @@ const RequestDetailsModal = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           NIC
                         </label>
+                        {formErrors.nic && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.nic}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuper}
                           value={nonSltStaffDetails.nic}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              nic: e.target.value,
-                            })
+                            handleNonSltFieldChange("nic", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter NIC"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.nic
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
+                          placeholder="e.g., 123456789V or 123456789012345"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Contact Number
                         </label>
+                        {formErrors.contactNo && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.contactNo}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuper}
                           value={nonSltStaffDetails.contactNo}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              contactNo: e.target.value,
-                            })
+                            handleNonSltFieldChange("contactNo", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter contact number"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.contactNo
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
+                          placeholder="e.g., +94701234567 or 0701234567"
                         />
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Email
                         </label>
+                        {formErrors.email && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.email}
+                          </p>
+                        )}
                         <input
                           type="email"
                           disabled={isSuper}
                           value={nonSltStaffDetails.email}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              email: e.target.value,
-                            })
+                            handleNonSltFieldChange("email", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter email"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.email
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
+                          placeholder="Enter email address"
                         />
                       </div>
                     </div>
@@ -3958,7 +4099,8 @@ const RequestDetailsModal = ({
                       className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium flex items-center transition-colors shadow-sm"
                     >
                       <FaPlus className="mr-2" />
-                      Add New item </button>
+                      Add New item{" "}
+                    </button>
                   )}
                 </div>
 
@@ -4002,12 +4144,15 @@ const RequestDetailsModal = ({
                         }
                         onChange={(e) => {
                           if (e.target.checked) {
-                            const allUnreturnedDESCRIPTIONs = (request.items || [])
+                            const allUnreturnedDESCRIPTIONs = (
+                              request.items || []
+                            )
                               .filter(
                                 (item) =>
                                   item.status === "returnable" &&
                                   !(request.returnableDESCRIPTIONs || []).find(
-                                    (ri) => ri.serialNumber === item.serialNumber,
+                                    (ri) =>
+                                      ri.serialNumber === item.serialNumber,
                                   )?.returned,
                               )
                               .map((item) => item.serialNumber);
@@ -4057,23 +4202,33 @@ const RequestDetailsModal = ({
                                 (request.items || []).filter(
                                   (item) =>
                                     item.status === "returnable" &&
-                                    !(request.returnableDESCRIPTIONs || []).find(
-                                      (ri) => ri.serialNumber === item.serialNumber,
+                                    !(
+                                      request.returnableDESCRIPTIONs || []
+                                    ).find(
+                                      (ri) =>
+                                        ri.serialNumber === item.serialNumber,
                                     )?.returned,
                                 ).length
                             }
                             onChange={(e) => {
                               if (e.target.checked) {
-                                const allUnreturnedDESCRIPTIONs = (request.items || [])
+                                const allUnreturnedDESCRIPTIONs = (
+                                  request.items || []
+                                )
                                   .filter(
                                     (item) =>
                                       item.status === "returnable" &&
-                                      !(request.returnableDESCRIPTIONs || []).find(
-                                        (ri) => ri.serialNumber === item.serialNumber,
+                                      !(
+                                        request.returnableDESCRIPTIONs || []
+                                      ).find(
+                                        (ri) =>
+                                          ri.serialNumber === item.serialNumber,
                                       )?.returned,
                                   )
                                   .map((item) => item.serialNumber);
-                                setSelectedDESCRIPTIONs(allUnreturnedDESCRIPTIONs);
+                                setSelectedDESCRIPTIONs(
+                                  allUnreturnedDESCRIPTIONs,
+                                );
                               } else {
                                 setSelectedDESCRIPTIONs([]);
                               }
@@ -4082,7 +4237,8 @@ const RequestDetailsModal = ({
                           />
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          item </th>
+                          item{" "}
+                        </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                           Serial Number
                         </th>
@@ -4171,7 +4327,9 @@ const RequestDetailsModal = ({
                                   item.serialNumber
                                 )}
                               </td>
-                              <td className="px-6 py-4">{item.categoryDescription}</td>
+                              <td className="px-6 py-4">
+                                {item.categoryDescription}
+                              </td>
                               <td className="px-6 py-4">
                                 {isEditing ? (
                                   <input
@@ -4231,7 +4389,9 @@ const RequestDetailsModal = ({
                                       ) : (
                                         <button
                                           onClick={() =>
-                                            handleEditReturnableDESCRIPTION(item)
+                                            handleEditReturnableDESCRIPTION(
+                                              item,
+                                            )
                                           }
                                           className="p-2 text-blue-600 hover:text-blue-800 transition-colors"
                                           title="Edit Item Code and serial number"
@@ -4279,7 +4439,8 @@ const RequestDetailsModal = ({
                 <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6">
                   <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-white flex items-center">
-                      <FaPlus className="mr-3" /> Add New Returnable item </h2>
+                      <FaPlus className="mr-3" /> Add New Returnable item{" "}
+                    </h2>
                     <button
                       onClick={() => setShowAddDESCRIPTIONModal(false)}
                       className="text-white/80 hover:text-white transition-colors"
@@ -4300,7 +4461,10 @@ const RequestDetailsModal = ({
                         type="text"
                         value={newItem.itemDescription}
                         onChange={(e) =>
-                          setnewItem({ ...newItem, itemDescription: e.target.value })
+                          setnewItem({
+                            ...newItem,
+                            itemDescription: e.target.value,
+                          })
                         }
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="Enter item name"
@@ -4409,7 +4573,8 @@ const RequestDetailsModal = ({
                     className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center"
                   >
                     <FaPlus className="mr-2" />
-                    Add item </button>
+                    Add item{" "}
+                  </button>
                 </div>
               </div>
             </div>
@@ -4629,7 +4794,12 @@ const RequestDetailsModal = ({
                   {currentTab !== "navigation" && (
                     <button
                       onClick={goToNextTab}
-                      className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center"
+                      disabled={isNonSltLoadingStepInvalid}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center ${
+                        isNonSltLoadingStepInvalid
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : "bg-blue-500 hover:bg-blue-600 text-white"
+                      }`}
                     >
                       Next <FaArrowRight className="ml-2" />
                     </button>
@@ -4791,7 +4961,9 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
           {/* Header with close button */}
           <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-semibold text-white">{itemDescription}</h3>
+              <h3 className="text-xl font-semibold text-white">
+                {itemDescription}
+              </h3>
               <button
                 onClick={onClose}
                 className="text-white hover:text-white/80 bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all"

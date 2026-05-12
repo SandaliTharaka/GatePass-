@@ -1,8 +1,6 @@
-import axios from "axios";
+import axiosInstance from "./axiosConfig";
 import { PublicClientApplication } from "@azure/msal-browser";
-import { msalConfig, loginRequest } from "../config/azureConfig";
-
-export const API_BASE_URL = import.meta.env.VITE_API_URL;
+import { msalConfig, loginRequest, getAzureConfigIssues } from "../config/azureConfig";
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
@@ -18,7 +16,7 @@ const initializeMsal = async () => {
 export const authService = {
   login: async (userId, password, userType) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      const response = await axiosInstance.post(`/auth/login`, {
         userId,
         password,
         userType,
@@ -36,6 +34,11 @@ export const authService = {
 
   azureLogin: async () => {
     try {
+      const configIssues = getAzureConfigIssues();
+      if (configIssues.length > 0) {
+        throw new Error(`Azure configuration error: ${configIssues.join(", ")}`);
+      }
+
       // Initialize MSAL before using it
       await initializeMsal();
 

@@ -15,6 +15,73 @@ const {
   emitRequestRejection,
 } = require("../utils/socketEmitter");
 
+// ✅ Validation utilities for non-SLT loading staff
+const validateSLTNIC = (nic) => {
+  if (!nic) return false;
+  const nicStr = String(nic).trim();
+  // NIC format: 12 digits or 12 digits with V
+  return /^\d{12}V?$/i.test(nicStr);
+};
+
+const validateEmail = (email) => {
+  if (!email) return false;
+  const emailStr = String(email).trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr);
+};
+
+const validatePhoneNumber = (phone) => {
+  if (!phone) return false;
+  const phoneStr = String(phone).trim();
+  return /^(0\d{9}|\+94\d{9})$/.test(phoneStr);
+};
+
+const validateNonEmptyString = (value) => {
+  if (!value) return false;
+  return String(value).trim().length > 0;
+};
+
+// ✅ Validate non-SLT loading staff fields
+const validateNonSLTLoadingStaff = (data) => {
+  const errors = [];
+
+  if (!validateNonEmptyString(data.nonSLTStaffName)) {
+    errors.push("Loading staff name is required for non-SLT staff");
+  }
+
+  if (!validateNonEmptyString(data.nonSLTStaffCompany)) {
+    errors.push("Loading staff company name is required for non-SLT staff");
+  }
+
+  if (!validateSLTNIC(data.nonSLTStaffNIC)) {
+    errors.push(
+      "Invalid loading staff NIC format. NIC should be 12 digits (optionally with V suffix)",
+    );
+  }
+
+  if (!validatePhoneNumber(data.nonSLTStaffContact)) {
+    errors.push(
+      "Invalid loading staff contact number. Use 0XXXXXXXXX or +94XXXXXXXXX",
+    );
+  }
+
+  if (!validateEmail(data.nonSLTStaffEmail)) {
+    errors.push("Invalid loading staff email address");
+  }
+
+  return errors;
+};
+
+const normalizeLoadingStaffType = (staffType) => {
+  const normalized = String(staffType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+
+  if (normalized === "slt") return "SLT";
+  if (normalized === "non-slt" || normalized === "nonslt") return "Non-SLT";
+  return "";
+};
+
 // ---------------- helpers ----------------
 const normalizeRole = (r) =>
   String(r || "")
@@ -421,6 +488,40 @@ exports.updateApproved = async (req, res) => {
       return res.status(404).json({ message: "Status/Request not found" });
     }
 
+    // ✅ Validate non-SLT loading staff if applicable
+    const validationErrors = [];
+    if (loadingDetails) {
+      loadingDetails.staffType = normalizeLoadingStaffType(
+        loadingDetails.staffType,
+      );
+      if (!loadingDetails.staffType) {
+        validationErrors.push("Loading staff type must be SLT or Non-SLT");
+      }
+    }
+
+    if (loadingDetails && loadingDetails.staffType === "Non-SLT") {
+      const nonSltErrors = validateNonSLTLoadingStaff({
+        nonSLTStaffName: loadingDetails.nonSLTStaffName,
+        nonSLTStaffCompany: loadingDetails.nonSLTStaffCompany,
+        nonSLTStaffNIC: loadingDetails.nonSLTStaffNIC,
+        nonSLTStaffContact: loadingDetails.nonSLTStaffContact,
+        nonSLTStaffEmail: loadingDetails.nonSLTStaffEmail,
+      });
+      validationErrors.push(...nonSltErrors);
+    }
+
+    // ✅ Return validation errors if any
+    if (validationErrors.length > 0) {
+      console.error(
+        "❌ Validation errors for loading staff:",
+        validationErrors,
+      );
+      return res.status(400).json({
+        message: "Validation failed for non-SLT loading staff inputs",
+        errors: validationErrors,
+      });
+    }
+
     // Check if it's a Non-SLT destination
     const isNonSltPlace = status.request.isNonSltPlace === true;
     // Check if receiver is available
@@ -451,11 +552,15 @@ exports.updateApproved = async (req, res) => {
           : new Date(),
         staffType: loadingDetails.staffType,
         staffServiceNo: loadingDetails.staffServiceNo,
-        nonSLTStaffName: loadingDetails.nonSLTStaffName,
-        nonSLTStaffCompany: loadingDetails.nonSLTStaffCompany,
-        nonSLTStaffNIC: loadingDetails.nonSLTStaffNIC,
-        nonSLTStaffContact: loadingDetails.nonSLTStaffContact,
-        nonSLTStaffEmail: loadingDetails.nonSLTStaffEmail,
+        nonSLTStaffName: String(loadingDetails.nonSLTStaffName || "").trim(),
+        nonSLTStaffCompany: String(
+          loadingDetails.nonSLTStaffCompany || "",
+        ).trim(),
+        nonSLTStaffNIC: String(loadingDetails.nonSLTStaffNIC || "").trim(),
+        nonSLTStaffContact: String(
+          loadingDetails.nonSLTStaffContact || "",
+        ).trim(),
+        nonSLTStaffEmail: String(loadingDetails.nonSLTStaffEmail || "").trim(),
       };
     }
 
@@ -534,14 +639,11 @@ exports.updateApproved = async (req, res) => {
       await status.request.save();
     }
 
-    if (status.request && status.request.isModified()) {
-      await status.request.save();
-    }
     await status.save();
 
     // Email Petrol Leader (Dispatch) at IN-location for dispatch approval
     try {
-      const pleader = await findPetrolLeaderForInLocation(inLocation);
+      const pleader = await findPetrolLeaderForInLocation(inLocationName);
       if (pleader && pleader.email) {
         const subject = `Gate Pass ready for dispatch approval: ${referenceNumber}`;
         const html = `
@@ -569,6 +671,12 @@ exports.updateApproved = async (req, res) => {
     return res.json(fresh);
   } catch (err) {
     console.error("Verifier approve error:", err);
+    if (err?.name === "ValidationError") {
+      return res.status(400).json({
+        message: err.message,
+        errors: Object.values(err.errors || {}).map((e) => e.message),
+      });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };

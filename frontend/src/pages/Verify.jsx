@@ -29,6 +29,17 @@ import {
 } from "../utils/userCache.js";
 import { useAutoRefetch } from "../hooks/useRealtimeUpdates.js";
 import {
+  validateRequired,
+  validateName,
+  validateSerialNumber,
+  validateNIC,
+  sanitizeNICInput,
+  sanitizePhoneInput,
+  validatePhone,
+  validateEmail,
+  validateCompanyName,
+} from "../utils/validators.js";
+import {
   FaClock,
   FaEye,
   FaUser,
@@ -474,11 +485,18 @@ const Verify = () => {
   const isSuperAdmin = role === "SUPERADMIN";
 
   // Add states for loading/unloading details
-  const [staffType, setStaffType] = useState("");
+  const [staffType, setStaffType] = useState("SLT");
   const [serviceId, setServiceId] = useState("");
   const [searchedEmployee, setSearchedEmployee] = useState(null);
 
   const [nonSltStaffDetails, setNonSltStaffDetails] = useState({
+    name: "",
+    companyName: "",
+    nic: "",
+    contactNo: "",
+    email: "",
+  });
+  const [formErrors, setFormErrors] = useState({
     name: "",
     companyName: "",
     nic: "",
@@ -490,6 +508,59 @@ const Verify = () => {
   const [companyTypeFilter, setCompanyTypeFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // Validation function for non-SLT employee details using centralized validators
+  const validateField = (field, value) => {
+    let error = "";
+
+    switch (field) {
+      case "name":
+        error = validateRequired(value, "Name") || validateName(value);
+        break;
+
+      case "companyName":
+        error = validateRequired(value, "Company name") || validateCompanyName(value);
+        break;
+
+      case "nic":
+        error = validateRequired(value, "NIC") || validateNIC(value);
+        break;
+
+      case "contactNo":
+        error = validateRequired(value, "Contact number") || validatePhone(value);
+        break;
+
+      case "email":
+        error = validateRequired(value, "Email") || validateEmail(value);
+        break;
+
+      default:
+        break;
+    }
+
+    return error;
+  };
+
+  // Handle field change with real-time validation
+  const handleNonSltFieldChange = (field, value) => {
+    const sanitizedValue =
+      field === "nic"
+        ? sanitizeNICInput(value)
+        : field === "contactNo"
+          ? sanitizePhoneInput(value)
+          : value;
+
+    setNonSltStaffDetails({
+      ...nonSltStaffDetails,
+      [field]: sanitizedValue,
+    });
+
+    const error = validateField(field, sanitizedValue);
+    setFormErrors({
+      ...formErrors,
+      [field]: error,
+    });
+  };
 
   // Real-time updates for Verify page (status: 2 = Verifier Pending)
   useAutoRefetch(
@@ -1766,6 +1837,11 @@ const Verify = () => {
   // UPDATED: handleApprove function to use consolidated email function
   const handleApprove = async (item) => {
     try {
+      if (!["SLT", "Non-SLT"].includes(staffType)) {
+        showToast("Please select SLT or Non-SLT loading staff", "warning");
+        return;
+      }
+
       // Prepare loading details based on staff type
       let loadingDetails = {
         loadingLocation: item.outLocation,
@@ -1791,30 +1867,11 @@ const Verify = () => {
           return;
         }
 
-        // Call API to approve status with comment and loading details
-        const updatedStatus = await approveStatus(
-          item.refNo,
-          comment,
-          loadingDetails,
-          userDetails.serviceNo,
-        );
-
-        // Send emails to both petrol leaders and receiver
-        await sendApprovalEmails(item, comment);
-
-        // Format the approved item in the same structure as your UI expects
-        const approvedDESCRIPTION = {
-          refNo: updatedStatus.referenceNumber,
-          name: updatedStatus.request?.name,
-          inLocation: updatedStatus.request?.inLocation,
-          outLocation: updatedStatus.request?.outLocation,
-          createdAt: new Date(
-            updatedStatus.request?.createdAt || updatedStatus.createdAt,
-          ).toLocaleString(),
-          items: updatedStatus.request?.items || [],
-          comment: updatedStatus.verifyOfficerComment,
-          requestDetails: { ...updatedStatus.request },
-        };
+        loadingDetails.nonSLTStaffName = nonSltStaffDetails.name;
+        loadingDetails.nonSLTStaffCompany = nonSltStaffDetails.companyName;
+        loadingDetails.nonSLTStaffNIC = nonSltStaffDetails.nic;
+        loadingDetails.nonSLTStaffContact = nonSltStaffDetails.contactNo;
+        loadingDetails.nonSLTStaffEmail = nonSltStaffDetails.email;
       }
 
       console.log("=== Starting approval process ===");
@@ -2627,6 +2684,9 @@ const Verify = () => {
         sendReturnTOExecutiveEmail={sendReturnTOExecutiveEmail}
         setNonSltStaffDetails={setNonSltStaffDetails}
         isSuperAdmin={isSuperAdmin}
+        formErrors={formErrors}
+        handleNonSltFieldChange={handleNonSltFieldChange}
+        validateField={validateField}
       />
     </div>
   );
@@ -2657,6 +2717,9 @@ const RequestDetailsModal = ({
   nonSltStaffDetails,
   setNonSltStaffDetails,
   isSuperAdmin,
+  formErrors,
+  handleNonSltFieldChange,
+  validateField,
 }) => {
   // Initialize with the correct value from request
   const [selectedExecutive, setSelectedExecutive] = useState("");
@@ -2678,6 +2741,17 @@ const RequestDetailsModal = ({
     returnDate: "",
     status: "returnable",
   });
+
+  // Error states for new item form
+  const [newItemErrors, setNewItemErrors] = useState({
+    itemDescription: "",
+    serialNumber: "",
+    categoryDescription: "",
+    itemCode: "",
+  });
+
+  // Error state for service ID
+  const [serviceIdError, setServiceIdError] = useState("");
 
   // Add these new states for tab navigation
   const [currentTab, setCurrentTab] = useState("details");
@@ -2773,27 +2847,92 @@ const RequestDetailsModal = ({
     });
   };
 
+  // Validation handler for new item fields
+  const handleNewItemFieldChange = (field, value) => {
+    setNewDESCRIPTION({ ...newDESCRIPTION, [field]: value });
+    
+    // Real-time validation
+    let error = "";
+    switch (field) {
+      case "itemDescription":
+        error = validateRequired(value, "Item name");
+        if (!error && (value.trim().length < 2 || value.trim().length > 200)) {
+          error = "Item name must be between 2 and 200 characters";
+        }
+        break;
+      case "serialNumber":
+        error = validateRequired(value, "Serial number");
+        if (!error) {
+          const serialError = validateSerialNumber(value);
+          if (serialError) error = serialError;
+        }
+        break;
+      case "categoryDescription":
+        error = validateRequired(value, "Category");
+        if (!error && (value.trim().length < 2 || value.trim().length > 100)) {
+          error = "Category must be between 2 and 100 characters";
+        }
+        break;
+      case "itemCode":
+        // Item code is optional, but if provided should be alphanumeric
+        if (value && !/^[A-Za-z0-9\-_]+$/.test(value)) {
+          error = "Item code must be alphanumeric (letters, numbers, hyphens, underscores only)";
+        }
+        break;
+      default:
+        break;
+    }
+    
+    setNewItemErrors({ ...newItemErrors, [field]: error });
+  };
+
   const handleAddNewDESCRIPTION = async () => {
-    if (
-      !newDESCRIPTION.itemDescription ||
-      !newDESCRIPTION.serialNumber ||
-      !newDESCRIPTION.categoryDescription
-    ) {
-      alert(
-        "Please fill in all required fields (item Name, Serial Number, Category)",
-      );
+    // Validate all required fields
+    const errors = {
+      itemDescription: validateRequired(newDESCRIPTION.itemDescription, "Item name") || 
+        (newDESCRIPTION.itemDescription.trim().length < 2 || newDESCRIPTION.itemDescription.trim().length > 200 
+          ? "Item name must be between 2 and 200 characters" : ""),
+      serialNumber: validateRequired(newDESCRIPTION.serialNumber, "Serial number") || 
+        validateSerialNumber(newDESCRIPTION.serialNumber),
+      categoryDescription: validateRequired(newDESCRIPTION.categoryDescription, "Category") || 
+        (newDESCRIPTION.categoryDescription.trim().length < 2 || newDESCRIPTION.categoryDescription.trim().length > 100 
+          ? "Category must be between 2 and 100 characters" : ""),
+      itemCode: newDESCRIPTION.itemCode && !/^[A-Za-z0-9\-_]+$/.test(newDESCRIPTION.itemCode) 
+        ? "Item code must be alphanumeric (letters, numbers, hyphens, underscores only)" : "",
+    };
+
+    setNewItemErrors(errors);
+
+    // Check if there are any errors
+    if (Object.values(errors).some(error => error)) {
+      showToast("Please fix all validation errors before adding the item", "error");
       return;
     }
 
     try {
       await addReturnableItemToRequest(request.refNo, newDESCRIPTION);
-      alert("Returnable item added successfully!");
+      showToast("Returnable item added successfully!", "success");
+      setNewDESCRIPTION({
+        itemDescription: "",
+        serialNumber: "",
+        categoryDescription: "",
+        itemCode: "",
+        itemQuantity: 1,
+        returnDate: "",
+        status: "returnable",
+      });
+      setNewItemErrors({
+        itemDescription: "",
+        serialNumber: "",
+        categoryDescription: "",
+        itemCode: "",
+      });
       setShowAddDESCRIPTIONModal(false);
       window.location.reload();
       // optionally refresh data here
     } catch (error) {
       console.error(error);
-      alert("Failed to add item: " + error.message);
+      showToast("Failed to add item: " + error.message, "error");
     }
   };
 
@@ -2825,10 +2964,21 @@ const RequestDetailsModal = ({
   };
 
   const handleEmployeeSearch = async () => {
+    // Validate service ID
     if (!serviceId.trim()) {
-      showToast("Please enter a service number", "warning");
+      setServiceIdError("Service ID is required");
+      showToast("Please enter a service ID", "error");
       return;
     }
+
+    // Basic service ID format validation (alphanumeric, 3-20 chars)
+    if (!/^[A-Za-z0-9]{3,20}$/.test(serviceId.trim())) {
+      setServiceIdError("Service ID must be 3-20 alphanumeric characters");
+      showToast("Invalid service ID format", "error");
+      return;
+    }
+
+    setServiceIdError("");
 
     try {
       setLoading(true);
@@ -4238,16 +4388,25 @@ const RequestDetailsModal = ({
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         item Name <span className="text-red-500">*</span>
                       </label>
+                      {newItemErrors.itemDescription && (
+                        <p className="text-red-500 text-xs mb-1">
+                          {newItemErrors.itemDescription}
+                        </p>
+                      )}
                       <input
                         type="text"
                         value={newDESCRIPTION.itemDescription}
                         onChange={(e) =>
-                          setNewDESCRIPTION({
-                            ...newDESCRIPTION,
-                            itemDescription: e.target.value,
-                          })
+                          handleNewItemFieldChange("itemDescription", e.target.value)
                         }
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onBlur={(e) =>
+                          handleNewItemFieldChange("itemDescription", e.target.value)
+                        }
+                        className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                          newItemErrors.itemDescription
+                            ? "border-2 border-red-500 bg-red-50"
+                            : "border border-gray-300"
+                        }`}
                         placeholder="Enter item name"
                       />
                     </div>
@@ -4256,16 +4415,25 @@ const RequestDetailsModal = ({
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Serial Number <span className="text-red-500">*</span>
                       </label>
+                      {newItemErrors.serialNumber && (
+                        <p className="text-red-500 text-xs mb-1">
+                          {newItemErrors.serialNumber}
+                        </p>
+                      )}
                       <input
                         type="text"
                         value={newDESCRIPTION.serialNumber}
                         onChange={(e) =>
-                          setNewDESCRIPTION({
-                            ...newDESCRIPTION,
-                            serialNo: e.target.value,
-                          })
+                          handleNewItemFieldChange("serialNumber", e.target.value)
                         }
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onBlur={(e) =>
+                          handleNewItemFieldChange("serialNumber", e.target.value)
+                        }
+                        className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                          newItemErrors.serialNumber
+                            ? "border-2 border-red-500 bg-red-50"
+                            : "border border-gray-300"
+                        }`}
                         placeholder="Enter serial number"
                       />
                     </div>
@@ -4274,16 +4442,25 @@ const RequestDetailsModal = ({
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Category <span className="text-red-500">*</span>
                       </label>
+                      {newItemErrors.categoryDescription && (
+                        <p className="text-red-500 text-xs mb-1">
+                          {newItemErrors.categoryDescription}
+                        </p>
+                      )}
                       <input
                         type="text"
                         value={newDESCRIPTION.categoryDescription}
                         onChange={(e) =>
-                          setNewDESCRIPTION({
-                            ...newDESCRIPTION,
-                            categoryDescription: e.target.value,
-                          })
+                          handleNewItemFieldChange("categoryDescription", e.target.value)
                         }
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onBlur={(e) =>
+                          handleNewItemFieldChange("categoryDescription", e.target.value)
+                        }
+                        className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                          newItemErrors.categoryDescription
+                            ? "border-2 border-red-500 bg-red-50"
+                            : "border border-gray-300"
+                        }`}
                         placeholder="Enter category"
                       />
                     </div>
@@ -4292,17 +4469,26 @@ const RequestDetailsModal = ({
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Item Code
                       </label>
+                      {newItemErrors.itemCode && (
+                        <p className="text-red-500 text-xs mb-1">
+                          {newItemErrors.itemCode}
+                        </p>
+                      )}
                       <input
                         type="text"
                         value={newDESCRIPTION.itemCode}
                         onChange={(e) =>
-                          setNewDESCRIPTION({
-                            ...newDESCRIPTION,
-                            itemCode: e.target.value,
-                          })
+                          handleNewItemFieldChange("itemCode", e.target.value)
                         }
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter Item Code"
+                        onBlur={(e) =>
+                          handleNewItemFieldChange("itemCode", e.target.value)
+                        }
+                        className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                          newItemErrors.itemCode
+                            ? "border-2 border-red-500 bg-red-50"
+                            : "border border-gray-300"
+                        }`}
+                        placeholder="Enter Item Code (optional)"
                       />
                     </div>
 
@@ -4382,7 +4568,7 @@ const RequestDetailsModal = ({
                 <div className="flex space-x-4 mb-6">
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "slt"
+                      staffType === "SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
@@ -4392,7 +4578,7 @@ const RequestDetailsModal = ({
                   </button>
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "non-slt"
+                      staffType === "Non-SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
@@ -4407,23 +4593,37 @@ const RequestDetailsModal = ({
                     {/* SLT Employee Search */}
                     <div className="mb-4">
                       <div className="flex items-center mb-4">
-                        <input
-                          type="text"
-                          value={serviceId}
-                          onChange={(e) => setServiceId(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === "Enter" &&
-                              !isSuperAdmin &&
-                              serviceId.trim()
-                            ) {
-                              e.preventDefault();
-                              handleEmployeeSearch();
-                            }
-                          }}
-                          placeholder="Enter Service ID"
-                          className="flex-grow px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        <div className="flex-grow">
+                          {serviceIdError && (
+                            <p className="text-red-500 text-xs mb-1">
+                              {serviceIdError}
+                            </p>
+                          )}
+                          <input
+                            type="text"
+                            value={serviceId}
+                            onChange={(e) => {
+                              setServiceId(e.target.value);
+                              setServiceIdError("");
+                            }}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                !isSuperAdmin &&
+                                serviceId.trim()
+                              ) {
+                                e.preventDefault();
+                                handleEmployeeSearch();
+                              }
+                            }}
+                            placeholder="Enter Service ID"
+                            className={`w-full px-4 py-2 rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                              serviceIdError
+                                ? "border-2 border-red-500 bg-red-50"
+                                : "border border-gray-300"
+                            }`}
+                          />
+                        </div>
 
                         <button
                           onClick={handleEmployeeSearch}
@@ -4502,17 +4702,23 @@ const RequestDetailsModal = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Name
                         </label>
+                        {formErrors.name && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.name}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuperAdmin}
                           value={nonSltStaffDetails.name}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              name: e.target.value,
-                            })
+                            handleNonSltFieldChange("name", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.name
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
                           placeholder="Enter name"
                         />
                       </div>
@@ -4520,17 +4726,26 @@ const RequestDetailsModal = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Company Name
                         </label>
+                        {formErrors.companyName && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.companyName}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuperAdmin}
                           value={nonSltStaffDetails.companyName}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              companyName: e.target.value,
-                            })
+                            handleNonSltFieldChange(
+                              "companyName",
+                              e.target.value,
+                            )
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.companyName
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
                           placeholder="Enter company name"
                         />
                       </div>
@@ -4538,54 +4753,72 @@ const RequestDetailsModal = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           NIC
                         </label>
+                        {formErrors.nic && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.nic}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuperAdmin}
                           value={nonSltStaffDetails.nic}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              nic: e.target.value,
-                            })
+                            handleNonSltFieldChange("nic", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter NIC"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.nic
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
+                          placeholder="e.g., 123456789V or 123456789012345"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Contact Number
                         </label>
+                        {formErrors.contactNo && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.contactNo}
+                          </p>
+                        )}
                         <input
                           type="text"
                           disabled={isSuperAdmin}
                           value={nonSltStaffDetails.contactNo}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              contactNo: e.target.value,
-                            })
+                            handleNonSltFieldChange("contactNo", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter contact number"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.contactNo
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
+                          placeholder="e.g., +94701234567 or 0701234567"
                         />
                       </div>
                       <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Email
                         </label>
+                        {formErrors.email && (
+                          <p className="text-red-500 text-xs mb-1">
+                            {formErrors.email}
+                          </p>
+                        )}
                         <input
                           type="email"
                           disabled={isSuperAdmin}
                           value={nonSltStaffDetails.email}
                           onChange={(e) =>
-                            setNonSltStaffDetails({
-                              ...nonSltStaffDetails,
-                              email: e.target.value,
-                            })
+                            handleNonSltFieldChange("email", e.target.value)
                           }
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter email"
+                          className={`w-full px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                            formErrors.email
+                              ? "border-2 border-red-500 bg-red-50"
+                              : "border border-gray-300"
+                          }`}
+                          placeholder="Enter email address"
                         />
                       </div>
                     </div>
