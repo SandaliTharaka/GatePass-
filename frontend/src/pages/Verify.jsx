@@ -162,6 +162,310 @@ const fetchOfficerData = async (status) => {
   return { executiveOfficerData, verifyOfficerData };
 };
 
+// PDF Generator function for Petrol Leader (moved to module level for accessibility)
+const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 36;
+  const usableWidth = pageWidth - margin * 2;
+  const lh = 12;
+  const palette = {
+    navy: [20, 55, 120],
+    slate: [78, 92, 115],
+    headingBg: [240, 245, 255],
+    border: [210, 218, 230],
+    tableHeader: [226, 234, 247],
+    text: [33, 37, 41],
+    rowAlt: [249, 251, 255],
+  };
+
+  const addHeader = () => {
+    try {
+      doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
+    } catch (e) {
+      // ignore logo rendering issues
+    }
+
+    doc.setDrawColor(...palette.navy);
+    doc.setLineWidth(1.1);
+    doc.line(margin, 64, pageWidth - margin, 64);
+
+    doc.setFontSize(17);
+    doc.setTextColor(...palette.navy);
+    doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
+      align: "center",
+    });
+
+    doc.setFontSize(9);
+    doc.setTextColor(...palette.slate);
+    doc.text("Official Item Movement Record", pageWidth / 2, 46, {
+      align: "center",
+    });
+
+    doc.setFontSize(9);
+    doc.setTextColor(...palette.slate);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
+      align: "right",
+    });
+
+    doc.setFontSize(10);
+    doc.setTextColor(...palette.text);
+    const refText = `Reference: ${fullRequest.referenceNumber || fullRequest.refNo || fullRequest.ref || "-"}`;
+    doc.text(refText, pageWidth / 2, 58, { align: "center" });
+  };
+
+  let currentY = 84;
+
+  const ensurePage = (neededHeight) => {
+    if (currentY + neededHeight > pageHeight - margin - 22) {
+      doc.addPage();
+      addHeader();
+      currentY = 84;
+    }
+  };
+
+  const drawKeyValueBox = (title, fields) => {
+    const titleH = 18;
+    const valueMaxWidth = usableWidth * 0.62;
+    const rows = fields.map((f) => {
+      const valueLines = doc.splitTextToSize(String(f[1] || "-"), valueMaxWidth);
+      const rowHeight = Math.max(18, valueLines.length * lh + 6);
+      return { key: f[0], valueLines, rowHeight };
+    });
+    const contentHeight = rows.reduce((sum, r) => sum + r.rowHeight, 0);
+
+    ensurePage(titleH + contentHeight + 18);
+
+    doc.setFillColor(...palette.headingBg);
+    doc.setDrawColor(...palette.border);
+    doc.rect(margin, currentY, usableWidth, titleH, "FD");
+
+    doc.setFontSize(10.5);
+    doc.setTextColor(...palette.navy);
+    doc.text(title, margin + 8, currentY + 12);
+
+    let rowTop = currentY + titleH;
+    rows.forEach((row, idx) => {
+      if (idx % 2 === 1) {
+        doc.setFillColor(...palette.rowAlt);
+        doc.rect(margin, rowTop, usableWidth, row.rowHeight, "F");
+      }
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text(String(row.key || "-"), margin + 8, rowTop + 12);
+
+      doc.setTextColor(...palette.text);
+      row.valueLines.forEach((line, lineIdx) => {
+        doc.text(line, margin + usableWidth * 0.34 + 8, rowTop + 12 + lineIdx * lh);
+      });
+
+      doc.setDrawColor(...palette.border);
+      doc.setLineWidth(0.4);
+      doc.line(margin, rowTop + row.rowHeight, margin + usableWidth, rowTop + row.rowHeight);
+      rowTop += row.rowHeight;
+    });
+
+    doc.rect(margin, currentY, usableWidth, titleH + contentHeight);
+    currentY = rowTop + 12;
+  };
+
+  addHeader();
+
+  const formatDateValue = (dateValue) => {
+    if (!dateValue) return "-";
+    const dateObj = new Date(dateValue);
+    if (Number.isNaN(dateObj.getTime())) return String(dateValue);
+    return dateObj.toLocaleDateString();
+  };
+
+  const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
+  const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
+  const senderInfo =
+    fullRequest.senderDetails || fullRequest.sender || requestCore.senderDetails || {};
+
+  drawKeyValueBox("Sender Details", [
+    ["Name", senderInfo.name || senderInfo.displayName || "-"],
+    ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || fullRequest.senderServiceNo || "-"],
+    ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
+    ["Section", senderInfo.section || senderInfo.department || "-"],
+    ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
+    ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
+  ]);
+
+  if (!items.length) {
+    drawKeyValueBox("Item Details", [["Items", "No items available"]]);
+  } else {
+    items.forEach((it, idx) => {
+      const itemFields = [
+        ["Description", it.itemDescription || it.description || "-"],
+        ["Serial No", it.serialNumber || "-"],
+        ["Item Code", it.itemCode || "-"],
+        ["Category", it.categoryDescription || it.category || "-"],
+        ["Quantity", String(it.itemQuantity || it.quantity || "-")],
+        ["Status", it.status || "-"],
+      ];
+
+      const isReturnable =
+        it.itemReturnable ||
+        it.isReturnable ||
+        String(it.status || "").toLowerCase() === "return to sender" ||
+        String(it.status || "").toLowerCase() === "returnable";
+
+      if (isReturnable) {
+        itemFields.push([
+          "Return Date",
+          formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+        ]);
+      }
+
+      drawKeyValueBox(`Item Details - Item ${idx + 1}`, itemFields);
+    });
+  }
+
+  const hdrH = 20;
+  const returnableItems = items.filter(
+    (it) => it.itemReturnable || it.isReturnable || it.status === "return to Sender",
+  );
+  if (returnableItems.length > 0) {
+    ensurePage(30 + 40);
+    doc.setFontSize(10.5);
+    doc.setTextColor(...palette.navy);
+    doc.text("Returnable Items", margin, currentY);
+    currentY += 14;
+
+    const retCols = ["Description", "Serial No", "Item Code", "Category", "Qty", "Return Date"];
+    const retColW = [usableWidth * 0.28, usableWidth * 0.14, usableWidth * 0.12, usableWidth * 0.12, usableWidth * 0.09, usableWidth * 0.25];
+    const retColX = [margin];
+    for (let i = 1; i < retColW.length; i++) retColX[i] = retColX[i - 1] + retColW[i - 1];
+
+    doc.setFillColor(...palette.tableHeader);
+    doc.setDrawColor(...palette.border);
+    doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+    doc.setFontSize(9);
+    doc.setTextColor(...palette.navy);
+    retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+    currentY += hdrH + 6;
+
+    returnableItems.forEach((it, idx) => {
+      const desc = it.itemDescription || it.description || "-";
+      const descLines = doc.splitTextToSize(desc, retColW[0] - 8);
+      const rowH = Math.max(20, descLines.length * lh + 6);
+
+      if (currentY + rowH > pageHeight - margin) {
+        doc.addPage();
+        addHeader();
+        currentY = 84;
+        doc.setFillColor(...palette.tableHeader);
+        doc.setDrawColor(...palette.border);
+        doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.navy);
+        retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+        currentY += hdrH + 6;
+      }
+
+      if (idx % 2 === 1) {
+        doc.setFillColor(...palette.rowAlt);
+        doc.rect(margin, currentY - 2, usableWidth, rowH + 4, "F");
+      }
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY - 2, usableWidth, rowH + 4);
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.text);
+      descLines.forEach((ln, li) => doc.text(ln, retColX[0] + 4, currentY + 10 + li * lh));
+      doc.text(it.serialNumber || "-", retColX[1] + 4, currentY + 12);
+      doc.text(it.itemCode || "-", retColX[2] + 4, currentY + 12);
+      doc.text(it.categoryDescription || it.category || "-", retColX[3] + 4, currentY + 12);
+      doc.text(String(it.itemQuantity || it.quantity || "-"), retColX[4] + 4, currentY + 12);
+      doc.text(
+        formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+        retColX[5] + 4,
+        currentY + 12,
+      );
+
+      currentY += rowH + 8;
+    });
+    currentY += 4;
+  }
+
+  drawKeyValueBox("Location Details", [
+    [
+      "Out Location",
+      fullRequest.outLocation ||
+        fullRequest.requestDetails?.outLocation ||
+        fullRequest.request?.outLocation ||
+        fullRequest.companyName ||
+        fullRequest.requestDetails?.companyName ||
+        fullRequest.request?.companyName ||
+        "-",
+    ],
+    [
+      "In Location",
+      fullRequest.inLocation ||
+        fullRequest.requestDetails?.inLocation ||
+        fullRequest.request?.inLocation ||
+        "-",
+    ],
+  ]);
+
+  const isNonSltDestination = fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
+
+  const recv =
+    fullRequest.receiver ||
+    fullRequest.receiverDetails ||
+    {
+      name: requestCore.receiverName || fullRequest.receiverName || "-",
+      nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
+      contactNo: requestCore.receiverContact || fullRequest.receiverContact || "-",
+      serviceNo: requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+      group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
+      companyName: requestCore.companyName || fullRequest.companyName || "-",
+      email: requestCore.receiverEmail || fullRequest.receiverEmail || "-",
+    };
+
+  if (isNonSltDestination) {
+    drawKeyValueBox("Receiver Details", [
+      ["Name", recv.name || requestCore.receiverName || "-"],
+      [
+        "Company",
+        fullRequest.companyName || requestCore.companyName || recv.companyName || "-",
+      ],
+      ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+      ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
+    ]);
+  } else {
+    drawKeyValueBox("Receiver Details", [
+      ["Name", recv.name || requestCore.receiverName || "-"],
+      [
+        "Service No",
+        recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+      ],
+      ["Group", recv.group || requestCore.receiverGroup || "-"],
+      ["Section", recv.section || requestCore.receiverSection || "-"],
+      ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
+      ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+    ]);
+  }
+
+  const pageCount = doc.getNumberOfPages();
+  for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
+    doc.setPage(pageNo);
+    const footerY = pageHeight - 24;
+    doc.setDrawColor(...palette.border);
+    doc.line(margin, footerY - 10, pageWidth - margin, footerY - 10);
+    doc.setFontSize(8);
+    doc.setTextColor(...palette.slate);
+    doc.text("Electronically generated gate pass document", margin, footerY);
+    doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
+  }
+
+  const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
+  doc.save(`SLT_GatePass_${safeRef}.pdf`);
+};
+
 const Verify = () => {
   const [activeTab, setActiveTab] = useState("pending");
   const [showModal, setShowModal] = useState(false);
@@ -3326,188 +3630,6 @@ const RequestDetailsModal = ({
     };
   };
 
-  const generateDESCRIPTIONDetailsPDF = (items, refNo) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-
-    // Add SLT logo
-    try {
-      doc.addImage(logoUrl, "PNG", margin, 10, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
-    }
-
-    // Header
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 153); // SLT blue color
-    doc.text("SLT Gate Pass - item Details", pageWidth / 2, 20, {
-      align: "center",
-    });
-
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Reference: ${request.refNo}`, pageWidth / 2, 30, {
-      align: "center",
-    });
-
-    // Add current date
-    const currentDate = new Date().toLocaleDateString();
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${currentDate}`, pageWidth - margin, 20, {
-      align: "right",
-    });
-
-    // Horizontal line
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, 35, pageWidth - margin, 35);
-
-    // items Table
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text("item Details", margin, 45);
-
-    // Table header
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.setDrawColor(200, 200, 200);
-
-    // Define column widths
-    const col1Width = 60; // item Name
-    const col2Width = 40; // Serial Number
-    const col3Width = 30; // Category
-    const col4Width = 20; // Quantity
-    const col5Width = 30; // Status
-
-    // Draw table header
-    doc.setFillColor(240, 240, 240);
-    doc.rect(
-      margin,
-      yPos,
-      col1Width + col2Width + col3Width + col4Width + col5Width,
-      8,
-      "F",
-    );
-
-    doc.text("item Name", margin + 3, yPos + 5.5);
-    doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-    doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-    doc.text("Qty", margin + col1Width + col2Width + col3Width + 3, yPos + 5.5);
-    doc.text(
-      "Item Code",
-      margin + col1Width + col2Width + col3Width + col4Width + 3,
-      yPos + 5.5,
-    );
-
-    yPos += 8;
-
-    // Draw table content
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        // Add new page if content exceeds page height
-        doc.addPage();
-        yPos = 20;
-
-        // Add table header on new page
-        doc.setFillColor(240, 240, 240);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-
-        doc.text("item Name", margin + 3, yPos + 5.5);
-        doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-        doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-        doc.text(
-          "Qty",
-          margin + col1Width + col2Width + col3Width + 3,
-          yPos + 5.5,
-        );
-        doc.text(
-          "Item Code",
-          margin + col1Width + col2Width + col3Width + col4Width + 3,
-          yPos + 5.5,
-        );
-
-        yPos += 8;
-      }
-
-      // Alternate row colors for better readability
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 248, 248);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-      }
-
-      // Truncate long text to fit in columns
-      const truncateText = (text, maxLength) => {
-        if (!text) return "N/A";
-        return text.length > maxLength
-          ? text.substring(0, maxLength) + "..."
-          : text;
-      };
-
-      doc.text(
-        truncateText(item?.itemDescription || "N/A", 25),
-        margin + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.serialNumber || "N/A", 15),
-        margin + col1Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.categoryDescription || "N/A", 12),
-        margin + col1Width + col2Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        item?.itemQuantity?.toString() || "1",
-        margin + col1Width + col2Width + col3Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.itemCode || "N/A", 15),
-        margin + col1Width + col2Width + col3Width + col4Width + 3,
-        yPos + 5.5,
-      );
-
-      // Draw horizontal line after each row
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width + col5Width,
-        yPos + 8,
-      );
-
-      yPos += 8;
-    });
-
-    // Footer
-    const footerYPos = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      "This is an electronically generated document and does not require signature.",
-      pageWidth / 2,
-      footerYPos,
-      { align: "center" },
-    );
-
-    // Save the PDF
-    doc.save(`SLT_GatePass_DESCRIPTIONs_${request.refNo}.pdf`);
-  };
-
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl max-w-4xl w-full flex flex-col h-[95vh] overflow-hidden shadow-2xl">
@@ -3645,12 +3767,7 @@ const RequestDetailsModal = ({
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
                   <FaBoxOpen className="mr-2" /> item Details
                   <button
-                    onClick={() =>
-                      generateDESCRIPTIONDetailsPDF(
-                        request.items,
-                        request.refNo,
-                      )
-                    }
+                    onClick={() => generateDESCRIPTIONDetailsPDF(request)}
                     className="ml-auto px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center transition-colors"
                   >
                     <FaFilePdf className="mr-2" /> Download items PDF
