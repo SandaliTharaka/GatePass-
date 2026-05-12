@@ -878,15 +878,11 @@ const RequestDetailsModal = ({
             <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
               <FaBoxOpen className="mr-2" /> Item Details
               <button
-                onClick={() => generateItemDetailsPDF(request)}
                 onClick={() => {
                   try {
-                    generateItemDetailsPDF(
-                      request.items || [],
-                      request.referenceNumber,
-                    );
+                    generateItemDetailsPDF(request);
                   } catch (error) {
-                    console.error("Failed to generate items PDF:", error);
+                    console.error("Failed to generate PDF:", error);
                     alert("Failed to generate PDF. Please try again.");
                   }
                 }}
