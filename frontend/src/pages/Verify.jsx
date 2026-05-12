@@ -34,7 +34,7 @@ import {
   validateSerialNumber,
   validateNIC,
   sanitizeNICInput,
-  sanitizeIntegerInput,
+  sanitizePhoneInput,
   validatePhone,
   validateEmail,
   validateCompanyName,
@@ -181,7 +181,7 @@ const Verify = () => {
   const isSuperAdmin = role === "SUPERADMIN";
 
   // Add states for loading/unloading details
-  const [staffType, setStaffType] = useState("");
+  const [staffType, setStaffType] = useState("SLT");
   const [serviceId, setServiceId] = useState("");
   const [searchedEmployee, setSearchedEmployee] = useState(null);
 
@@ -243,7 +243,7 @@ const Verify = () => {
       field === "nic"
         ? sanitizeNICInput(value)
         : field === "contactNo"
-          ? sanitizeIntegerInput(value)
+          ? sanitizePhoneInput(value)
           : value;
 
     setNonSltStaffDetails({
@@ -1533,6 +1533,11 @@ const Verify = () => {
   // UPDATED: handleApprove function to use consolidated email function
   const handleApprove = async (item) => {
     try {
+      if (!["SLT", "Non-SLT"].includes(staffType)) {
+        showToast("Please select SLT or Non-SLT loading staff", "warning");
+        return;
+      }
+
       // Prepare loading details based on staff type
       let loadingDetails = {
         loadingLocation: item.outLocation,
@@ -1558,30 +1563,11 @@ const Verify = () => {
           return;
         }
 
-        // Call API to approve status with comment and loading details
-        const updatedStatus = await approveStatus(
-          item.refNo,
-          comment,
-          loadingDetails,
-          userDetails.serviceNo,
-        );
-
-        // Send emails to both petrol leaders and receiver
-        await sendApprovalEmails(item, comment);
-
-        // Format the approved item in the same structure as your UI expects
-        const approvedDESCRIPTION = {
-          refNo: updatedStatus.referenceNumber,
-          name: updatedStatus.request?.name,
-          inLocation: updatedStatus.request?.inLocation,
-          outLocation: updatedStatus.request?.outLocation,
-          createdAt: new Date(
-            updatedStatus.request?.createdAt || updatedStatus.createdAt,
-          ).toLocaleString(),
-          items: updatedStatus.request?.items || [],
-          comment: updatedStatus.verifyOfficerComment,
-          requestDetails: { ...updatedStatus.request },
-        };
+        loadingDetails.nonSLTStaffName = nonSltStaffDetails.name;
+        loadingDetails.nonSLTStaffCompany = nonSltStaffDetails.companyName;
+        loadingDetails.nonSLTStaffNIC = nonSltStaffDetails.nic;
+        loadingDetails.nonSLTStaffContact = nonSltStaffDetails.contactNo;
+        loadingDetails.nonSLTStaffEmail = nonSltStaffDetails.email;
       }
 
       console.log("=== Starting approval process ===");
@@ -4465,7 +4451,7 @@ const RequestDetailsModal = ({
                 <div className="flex space-x-4 mb-6">
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "slt"
+                      staffType === "SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
@@ -4475,7 +4461,7 @@ const RequestDetailsModal = ({
                   </button>
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "non-slt"
+                      staffType === "Non-SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}

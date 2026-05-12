@@ -28,8 +28,9 @@ import {
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { markItemsAsReturned } from "../services/myRequestService.js";
+import StatusTimelineModal from "../components/StatusTimelineModal";
 
-const StatusPill = ({ statusCode }) => {
+const StatusPill = ({ statusCode, onClick, referenceNumber }) => {
   const getStatusLabel = (code) => {
     const statusMap = {
       1: "Executive Pending",
@@ -51,7 +52,7 @@ const StatusPill = ({ statusCode }) => {
 
   const getStatusStyle = (code) => {
     const baseStyles =
-      "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium";
+      "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-all hover:shadow-md hover:scale-105";
     const status = getStatusLabel(code);
 
     if (status.includes("Pending"))
@@ -60,12 +61,16 @@ const StatusPill = ({ statusCode }) => {
       return `${baseStyles} bg-emerald-100 text-emerald-800`;
     if (status.includes("Rejected"))
       return `${baseStyles} bg-rose-100 text-rose-800`;
-    if (status === "Canceled") return `${baseStyles} bg-gray-100 text-gray-800`;
+    if (status === "Canceled") return `${baseStyles} bg-rose-100 text-rose-800`;
     return `${baseStyles} bg-gray-100 text-gray-800`;
   };
 
   return (
-    <span className={getStatusStyle(statusCode)}>
+    <span
+      className={getStatusStyle(statusCode)}
+      onClick={() => onClick && onClick(referenceNumber)}
+      title="Click to view status timeline"
+    >
       {getStatusLabel(statusCode)}
     </span>
   );
@@ -1181,6 +1186,8 @@ const GatePassRequests = () => {
   const [requests, setRequests] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+  const [timelineReference, setTimelineReference] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [user, setUser] = useState(null);
@@ -1451,7 +1458,14 @@ const GatePassRequests = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <StatusPill statusCode={request.status} />
+                    <StatusPill
+                      statusCode={request.status}
+                      referenceNumber={request.referenceNumber}
+                      onClick={() => {
+                        setTimelineReference(request.referenceNumber);
+                        setIsTimelineOpen(true);
+                      }}
+                    />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="flex justify-end gap-2">
@@ -1504,6 +1518,13 @@ const GatePassRequests = () => {
         user={user}
         receiver={receiver}
         transporterDetails={transportData}
+      />
+
+      <StatusTimelineModal
+        isOpen={isTimelineOpen}
+        onClose={() => setIsTimelineOpen(false)}
+        referenceNumber={timelineReference}
+        currentStatus={selectedRequest?.status}
       />
     </div>
   );

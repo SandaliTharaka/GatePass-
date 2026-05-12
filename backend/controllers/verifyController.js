@@ -32,8 +32,7 @@ const validateEmail = (email) => {
 const validatePhoneNumber = (phone) => {
   if (!phone) return false;
   const phoneStr = String(phone).trim();
-  // Allow +94, 0, or direct digits, with hyphens/spaces
-  return /^(\+94|0)?[\d\s\-]{9,15}$/.test(phoneStr);
+  return /^(0\d{9}|\+94\d{9})$/.test(phoneStr);
 };
 
 const validateNonEmptyString = (value) => {
@@ -61,7 +60,7 @@ const validateNonSLTLoadingStaff = (data) => {
 
   if (!validatePhoneNumber(data.nonSLTStaffContact)) {
     errors.push(
-      "Invalid loading staff contact number. Please provide a valid phone number",
+      "Invalid loading staff contact number. Use 0XXXXXXXXX or +94XXXXXXXXX",
     );
   }
 
@@ -70,6 +69,17 @@ const validateNonSLTLoadingStaff = (data) => {
   }
 
   return errors;
+};
+
+const normalizeLoadingStaffType = (staffType) => {
+  const normalized = String(staffType || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+
+  if (normalized === "slt") return "SLT";
+  if (normalized === "non-slt" || normalized === "nonslt") return "Non-SLT";
+  return "";
 };
 
 // ---------------- helpers ----------------
@@ -480,11 +490,16 @@ exports.updateApproved = async (req, res) => {
 
     // ✅ Validate non-SLT loading staff if applicable
     const validationErrors = [];
-    if (
-      loadingDetails &&
-      loadingDetails.staffType &&
-      loadingDetails.staffType !== "SLT"
-    ) {
+    if (loadingDetails) {
+      loadingDetails.staffType = normalizeLoadingStaffType(
+        loadingDetails.staffType,
+      );
+      if (!loadingDetails.staffType) {
+        validationErrors.push("Loading staff type must be SLT or Non-SLT");
+      }
+    }
+
+    if (loadingDetails && loadingDetails.staffType === "Non-SLT") {
       const nonSltErrors = validateNonSLTLoadingStaff({
         nonSLTStaffName: loadingDetails.nonSLTStaffName,
         nonSLTStaffCompany: loadingDetails.nonSLTStaffCompany,
@@ -656,6 +671,12 @@ exports.updateApproved = async (req, res) => {
     return res.json(fresh);
   } catch (err) {
     console.error("Verifier approve error:", err);
+    if (err?.name === "ValidationError") {
+      return res.status(400).json({
+        message: err.message,
+        errors: Object.values(err.errors || {}).map((e) => e.message),
+      });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };
