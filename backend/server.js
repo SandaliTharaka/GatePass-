@@ -20,8 +20,8 @@ const isDevelopment = NODE_ENV === 'development';
 // Production: Only https://gatepass.slt.lk
 // Development: Allow localhost for testing
 const ALLOWED_ORIGINS = isDevelopment 
-  ? ['http://localhost:5173', 'http://localhost:3000', 'https://gatepass.slt.lk']
-  : ['https://gatepass.slt.lk'];
+  ? ['http://localhost:5173', 'http://localhost:3000', 'https://gatepass.slt.lk', 'http://172.25.41.33:8000']
+  : ['https://gatepass.slt.lk', 'http://172.25.41.33:8000'];
 
 console.log(`🌍 Environment: ${NODE_ENV}`);
 console.log(`🔒 Allowed CORS origins:`, ALLOWED_ORIGINS);
@@ -167,7 +167,7 @@ const verifyRoutes = require("./routes/verifyRoutes");
 const dispatchRoutes = require("./routes/dispatchroutes");
 const adminRouters = require("./routes/adminRoutes");
 const receiveRoutes = require("./routes/receiveRoutes");
-const emailRoutes = require("./routes/emailRoutes");
+// emailRoutes removed — all emails are sent server-side by controllers
 const superAdminRoutes = require("./routes/superAdminRoutes");
 const adminRequestRoutes = require("./routes/adminRequestRoutes");
 const erpRoutes = require("./routes/erpRoutes");
@@ -192,7 +192,7 @@ app.use("/api/admin", adminRouters);
 app.use("/api/myRequest", myRequestRoutes);
 app.use("/api/super-admin", superAdminRoutes);
 app.use("/api/receive", receiveRoutes);
-app.use("/api/email", emailRoutes);
+// /api/email endpoint removed — emails handled internally by controllers
 app.use("/api/admin", adminRequestRoutes);
 app.use("/api/erp", erpRoutes);
 app.use("/api/item-holiday", itemHolidayApiRoutes);

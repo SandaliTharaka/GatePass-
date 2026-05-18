@@ -17,7 +17,7 @@ import {
   getGatePassRequest,
 } from "../services/RequestService.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { FaSearch } from "react-icons/fa";
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
@@ -620,8 +620,7 @@ const ExecutiveApproval = () => {
       setpendingItems(pendingItems.filter((i) => i.refNo !== item.refNo));
       setapprovedItems([...approvedItems, approvedItem]);
 
-      // Send email to petrol leader
-      await sendApprovalEmailToPetrolLeader(approvedItem, comment);
+      // Email notification is sent server-side by the backend controller
 
       // Reset modal and comment
       setShowModal(false);
@@ -635,345 +634,11 @@ const ExecutiveApproval = () => {
       showToast("Failed to approve request", "error");
     }
   };
-  const sendReturnEmail = async (request, comment, itemDetails = []) => {
-    try {
-      if (!request.senderDetails?.email) {
-        showToast("Sender email not available", "error");
-        return;
-      }
 
-      const emailSubject = `Returnable items Update: ${request.refNo}`;
+  // Email sending functions removed â€” all notifications are now sent
+  // server-side by backend controllers (sendMail.js)
 
-      // Create items table for email
-      const itemsTable =
-        itemDetails.length > 0
-          ? `
-        <div style="margin: 20px 0;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Returned items</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">item Name</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Serial Number</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Category</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Quantity</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemDetails
-                .map(
-                  (item) => `
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemDescription || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.serialNumber || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.categoryDescription || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemQuantity || "1"
-                  }</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `
-          : "";
 
-      const emailBody = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #2fd33dff; margin-bottom: 5px;">Returnable items Update</h2>
-            <p style="color: #757575; font-size: 14px;">Reference Number: ${
-              request.refNo
-            }</p>
-          </div>
-          
-          <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-            <p>Dear ${request.senderDetails.name},</p>
-            
-            <p>We would like to inform you that ${
-              itemDetails.length
-            } returnable item(s) under reference number <b>${
-              request.refNo
-            }</b> have been returned by the Receiver.</p>
-            <p>You can view it under your <i>Completed</i> or relevant section.</p>
-          </div>
-  
-          ${itemsTable}
-          
-          <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-            <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-            <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-          </div>
-        </div>
-      `;
-
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Return notification email sent to requester", "success");
-    } catch (error) {
-      console.error("Failed to send return email:", error);
-      showToast("Failed to send return email", "error");
-    }
-  };
-
-  // Add this function inside the ExecutiveApproval component
-  const sendRejectionEmail = async (request, comment) => {
-    try {
-      if (!request.senderDetails?.email) {
-        showToast("Sender email not available", "error");
-        return;
-      }
-
-      const emailSubject = `Gate Pass Request ${request.refNo} - Rejected`;
-
-      // Create a professional email body with HTML formatting
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #d32f2f; margin-bottom: 5px;">Gate Pass Request Rejected</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${
-            request.refNo
-          }</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-          <p>Dear ${request.senderDetails.name},</p>
-          <p>We regret to inform you that your gate pass request has been <strong>rejected</strong> by the executive approver.</p>
-          
-          <div style="margin-top: 15px;">
-            <p><strong>Reason for Rejection:</strong></p>
-            <p style="padding: 10px; background-color: #fff; border-left: 3px solid #d32f2f; margin-top: 5px;">${comment}</p>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Request Details</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr>
-              <td style="padding: 8px 0; color: #757575; width: 40%;">From Location:</td>
-              <td style="padding: 8px 0;">${request.outLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">To Location:</td>
-              <td style="padding: 8px 0;">${request.inLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">items:</td>
-              <td style="padding: 8px 0;">${request.items
-                .map((item) => `${item.itemDescription} (${item.serialNumber})`)
-                .join(", ")}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Requested Date:</td>
-              <td style="padding: 8px 0;">${new Date(
-                request.createdAt,
-              ).toLocaleDateString()}</td>
-            </tr>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <p>You may submit a new request with the necessary corrections or contact the approver for more information.</p>
-          <p>If you believe this rejection was made in error, please contact the IT support team.</p>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      // Send the email
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Rejection notification email sent to requester", "success");
-    } catch (error) {
-      console.error("Failed to send rejection email:", error);
-      showToast("Failed to send rejection email", "error");
-    }
-  };
-
-  // Add this function RIGHT AFTER the sendRejectionEmail function
-  // (around line 398-399 in your code)
-
-  const sendApprovalEmailToPetrolLeader = async (request, comment) => {
-    try {
-      // Get petrol leader email based on location or other criteria
-      const petrolLeaderEmail = await getPetrolLeaderEmail(request);
-
-      if (!petrolLeaderEmail) {
-        console.log("No petrol leader email found for this request");
-        return;
-      }
-
-      const emailSubject = `Gate Pass Request ${request.refNo} - Executive Approved`;
-
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #2fd33dff; margin-bottom: 5px;">Gate Pass - Executive Approved</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${
-            request.refNo
-          }</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-          <p>Dear Petrol Leader,</p>
-          <p>A gate pass request has been approved by the Executive Officer and is now awaiting your final review.</p>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Request Details</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr>
-              <td style="padding: 8px 0; color: #757575; width: 40%;">Reference No:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${
-                request.refNo
-              }</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Requester:</td>
-              <td style="padding: 8px 0;">${
-                request.senderDetails?.name || "N/A"
-              }</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">From Location:</td>
-              <td style="padding: 8px 0;">${request.outLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">To Location:</td>
-              <td style="padding: 8px 0;">${request.inLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Executive Comment:</td>
-              <td style="padding: 8px 0; font-style: italic;">${
-                comment || "No comment provided"
-              }</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Approved Date:</td>
-              <td style="padding: 8px 0;">${new Date().toLocaleDateString()}</td>
-            </tr>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">items (${
-            request.items.length
-          })</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">item Name</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Serial Number</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Quantity</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${request.items
-                .map(
-                  (item) => `
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemDescription || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.serialNumber || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemQuantity || "1"
-                  }</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-radius: 4px; border-left: 4px solid #4caf50;">
-          <p><strong>Action Required:</strong> Please review this approved request in your Petrol Leader dashboard.</p>
-          <p style="margin-top: 10px;">
-            <a href="${window.location.origin}/petrol-leader/approvals" 
-               style="background-color: #4caf50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
-              View in Dashboard
-            </a>
-          </p>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      await emailSent({
-        to: petrolLeaderEmail,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      console.log(
-        "Approval notification sent to petrol leader:",
-        petrolLeaderEmail,
-      );
-    } catch (error) {
-      console.error("Failed to send approval email to petrol leader:", error);
-    }
-  };
-
-  // Add this helper function as well
-  const getPetrolLeaderEmail = async (request) => {
-    try {
-      // Method 1: Hardcoded for testing (use this first)
-      // return "petrol.leader@slt.lk";
-
-      // Method 2: Get from location
-      const location = request.inLocation || request.outLocation || "";
-
-      // Define location-based email mapping
-      const locationEmailMap = {
-        Colombo: "petrol.colombo@slt.lk",
-        Kandy: "petrol.kandy@slt.lk",
-        Galle: "petrol.galle@slt.lk",
-        Matara: "petrol.matara@slt.lk",
-        Jaffna: "petrol.jaffna@slt.lk",
-        // Add more locations as needed
-      };
-
-      // Find matching location
-      for (const [key, email] of Object.entries(locationEmailMap)) {
-        if (location.toLowerCase().includes(key.toLowerCase())) {
-          return email;
-        }
-      }
-
-      // Default petrol leader email
-      return "petrol.leader@slt.lk";
-    } catch (error) {
-      console.error("Error getting petrol leader email:", error);
-      return "petrol.leader@slt.lk"; // Fallback
-    }
-  };
 
   const handleReject = async (item) => {
     try {
@@ -985,8 +650,7 @@ const ExecutiveApproval = () => {
       // Call API to reject status with comment
       const updatedStatus = await rejectStatus(item.refNo, comment);
 
-      // Send rejection email to the requester
-      await sendRejectionEmail(item, comment);
+      // Email notification is sent server-side by the backend controller
 
       // Format the rejected item in the same structure as your UI expects
       const rejectedItem = {
@@ -1523,7 +1187,7 @@ const ExecutiveApproval = () => {
         comment={comment}
         handleApprove={handleApprove}
         handleReject={handleReject}
-        sendReturnEmail={sendReturnEmail}
+        // sendReturnEmail removed — handled server-side
         setComment={setComment}
         showToast={showToast}
         transporterDetails={transportData}
@@ -1546,7 +1210,7 @@ const RequestDetailsModal = ({
   setComment,
   handleApprove,
   handleReject,
-  sendReturnEmail,
+
   showToast,
   transporterDetails,
   isSuperAdmin,
@@ -1595,12 +1259,7 @@ const RequestDetailsModal = ({
 
       console.log("Backend response:", response);
 
-      // Now send the email notification WITH item DETAILS
-      await sendReturnEmail(
-        request,
-        "items successfully returned by executive officer.",
-        selecteditemDetails,
-      );
+      // Email notification is sent server-side by the backend controller
 
       // Show success message
       showToast(
