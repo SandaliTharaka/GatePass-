@@ -1451,7 +1451,7 @@ const Verify = () => {
     // Combine and remove duplicates
     const allEmails = [...new Set([...branchSpecific, ...generalFallbacks])];
 
-    console.log(`ðŸ“§ Fallback emails for branch "${branch}":`, allEmails);
+    console.log(`📧 Fallback emails for branch "${branch}":`, allEmails);
     return allEmails;
   };
 
@@ -1576,7 +1576,7 @@ const Verify = () => {
         
         <!-- Header -->
         <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #2fd33dff; margin-bottom: 5px;">âš ï¸ Action Required: Review and Return items</h2>
+          <h2 style="color: #2fd33dff; margin-bottom: 5px;">⚠️ Action Required: Review and Return items</h2>
           <p style="color: #757575; font-size: 14px;">Reference Number: <strong>${
             request.refNo
           }</strong></p>
@@ -1585,7 +1585,7 @@ const Verify = () => {
         <!-- Alert Box -->
         <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
           <p style="margin: 0; color: #856404; font-size: 14px; font-weight: bold;">
-            âš¡ Urgent: Please review and return the items listed below
+            ⚡ Urgent: Please review and return the items listed below
           </p>
         </div>
         
@@ -1600,10 +1600,10 @@ const Verify = () => {
           <p style="margin-bottom: 15px;"><strong>Please review these items and arrange for their return as soon as possible.</strong></p>
           
           <p style="margin: 0;">
-            ðŸ“ <strong>Current Location:</strong> ${
+            📍 <strong>Current Location:</strong> ${
               request.inLocation || "N/A"
             }<br>
-            ðŸ“… <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
+            📅 <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -1735,12 +1735,12 @@ const Verify = () => {
           );
           emailCount++;
           successRecipients.push(`Petrol Leader: ${fallbackEmail}`);
-          console.log(`âœ… Email sent successfully to: ${fallbackEmail}`);
+          console.log(`✅ Email sent successfully to: ${fallbackEmail}`);
           fallbackSent = true;
           break; // Stop after first successful fallback
         } catch (fallbackError) {
           console.error(
-            `âŒ Fallback email failed for ${fallbackEmail}:`,
+            `❌ Fallback email failed for ${fallbackEmail}:`,
             fallbackError,
           );
           // Continue to next fallback
@@ -1749,7 +1749,7 @@ const Verify = () => {
 
       if (!fallbackSent) {
         errors.push("All fallback email attempts failed");
-        console.warn("âŒ All fallback email attempts failed");
+        console.warn("❌ All fallback email attempts failed");
       }
 
       // 2. Send email to receiver
@@ -1766,13 +1766,13 @@ const Verify = () => {
           );
         } catch (emailError) {
           console.error(
-            `âŒ Failed to send email to receiver ${request.receiverDetails.email}:`,
+            `❌ Failed to send email to receiver ${request.receiverDetails.email}:`,
             emailError,
           );
           errors.push(`Receiver email failed: ${emailError.message}`);
         }
       } else {
-        console.warn("âš ï¸ No valid receiver email available");
+        console.warn("⚠️ No valid receiver email available");
         errors.push("No valid receiver email available");
       }
 
@@ -1792,20 +1792,20 @@ const Verify = () => {
           );
         } else {
           showToast(
-            `âœ… Approval successful! Notifications sent to ${emailCount} recipient(s)`,
+            `✅ Approval successful! Notifications sent to ${emailCount} recipient(s)`,
             "success",
           );
         }
       } else {
         showToast(
-          "âœ… Request approved, but no email notifications could be sent",
+          "✅ Request approved, but no email notifications could be sent",
           "warning",
         );
       }
     } catch (error) {
-      console.error("âŒ Critical error in sendApprovalEmails:", error);
+      console.error("❌ Critical error in sendApprovalEmails:", error);
       showToast(
-        "âœ… Request approved, but email notifications failed. Please contact support.",
+        "✅ Request approved, but email notifications failed. Please contact support.",
         "error",
       );
       throw error;
@@ -1863,7 +1863,7 @@ const Verify = () => {
       );
 
       console.log(
-        "âœ… Request approved in database, now sending notifications...",
+        "✅ Request approved in database, now sending notifications...",
       );
 
       // Send emails - don't wait for result to block the approval (non-blocking)
@@ -1909,9 +1909,9 @@ const Verify = () => {
         email: "",
       });
 
-      console.log("âœ… Approval process completed successfully");
+      console.log("✅ Approval process completed successfully");
     } catch (error) {
-      console.error("âŒ Error approving status:", error.message);
+      console.error("❌ Error approving status:", error.message);
       showToast("Failed to approve request. Please try again.", "error");
     }
   };
@@ -2954,7 +2954,7 @@ const RequestDetailsModal = ({
 
       const response = await getEmployeeDetails(serviceId);
 
-      console.log("ERP response:", response); // âœ… keep for debug
+      console.log("ERP response:", response); // ✅ keep for debug
 
       const employee = response?.data?.data?.[0];
 

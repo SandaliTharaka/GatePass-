@@ -243,10 +243,10 @@ const NewRequest = () => {
         }
       })
       .catch((error) => {
-        console.error("âŒ Error fetching ERP hierarchy:", error);
+        console.error("❌ Error fetching ERP hierarchy:", error);
 
         // Fallback to old method if ERP fails
-        console.log("âš ï¸ Falling back to local database");
+        console.log("⚠️ Falling back to local database");
         getExecutiveOfficersForNewRequest()
           .then((data) => {
             setExecutiveOfficers(data.officers || []);
@@ -614,19 +614,19 @@ const NewRequest = () => {
   
   const handleSubmit = async () => {
     try {
-      // â­ VALIDATION 1: Check if items exist
+      // ⭐ VALIDATION 1: Check if items exist
       if (items.length === 0) {
         showToast("Please add at least one item before submitting", "warning");
         return;
       }
 
-      // â­ VALIDATION 2: Check executive officer
+      // ⭐ VALIDATION 2: Check executive officer
       if (!executiveOfficer || !executiveOfficer.trim()) {
         showToast("Please select an executive officer", "warning");
         return;
       }
 
-      // â­ VALIDATION 3: Check for any validation errors
+      // ⭐ VALIDATION 3: Check for any validation errors
       const hasValidationErrors =
         vehicleNumberError ||
         companyNameError ||
@@ -848,7 +848,7 @@ const NewRequest = () => {
         }
       }
 
-      // â­ All validations passed - proceed with form submission
+      // ⭐ All validations passed - proceed with form submission
       const formData = new FormData();
 
       // For Non-SLT destinations
@@ -866,7 +866,7 @@ const NewRequest = () => {
       // Add destination type flag
       formData.append("isNonSltPlace", destinationType === "non-slt");
 
-      // â­ FIX: Add receiverAvailable flag
+      // ⭐ FIX: Add receiverAvailable flag
       // Determine if receiver is available based on destination type and whether details exist
       let receiverAvailable = false;
 
@@ -899,7 +899,7 @@ const NewRequest = () => {
         }
       }
 
-      // â­ CRITICAL: Append the receiverAvailable flag
+      // ⭐ CRITICAL: Append the receiverAvailable flag
       formData.append("receiverAvailable", receiverAvailable);
 
       // Add transport details
@@ -1313,7 +1313,7 @@ const NewRequest = () => {
                   <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                     {execRestriction.reason === "HOLIDAY" && (
                       <>
-                        Only Senior Executives (Grade A.1â€“A.3) are allowed on
+                        Only Senior Executives (Grade A.1—A.3) are allowed on
                         public holidays.
                         {execRestriction.holidayName && (
                           <span className="block mt-1 font-semibold">
@@ -1324,10 +1324,10 @@ const NewRequest = () => {
                     )}
 
                     {execRestriction.reason === "WEEKEND" &&
-                      "Only Senior Executives (Grade A.1â€“A.3) are allowed on during weekends."}
+                      "Only Senior Executives (Grade A.1—A.3) are allowed on during weekends."}
 
                     {execRestriction.reason === "OFF_HOURS" &&
-                      "Only Senior Executives (Grade A.1â€“A.3) are allowed on outside working hours."}
+                      "Only Senior Executives (Grade A.1—A.3) are allowed on outside working hours."}
                   </p>
                 )}
               </div>
@@ -1567,7 +1567,7 @@ const NewRequest = () => {
               {/* Out Location */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Out Location (From â€“ Dispatching Branch)
+                  Out Location (From — Dispatching Branch)
                 </label>
                 {/* Out Location */}
                 <select
@@ -1599,7 +1599,7 @@ const NewRequest = () => {
               {destinationType === "slt" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    In Location (To â€“ Receiving Branch)
+                    In Location (To — Receiving Branch)
                   </label>
                   {/* In Location */}
                   <select

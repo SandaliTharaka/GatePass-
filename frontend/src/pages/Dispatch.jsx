@@ -951,7 +951,7 @@ const Dispatch = () => {
         </div>
         
         <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-radius: 4px;">
-          <h4 style="color: #2e7d32; margin-bottom: 10px;">ðŸšš Next Steps:</h4>
+          <h4 style="color: #2e7d32; margin-bottom: 10px;">🚚 Next Steps:</h4>
           <ul style="margin: 0; padding-left: 20px;">
             <li>items will be dispatched from <strong>${
               requestData.outLocation
@@ -1125,7 +1125,7 @@ const Dispatch = () => {
         
         <!-- Header -->
         <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #2fd33dff; margin-bottom: 5px;">âš ï¸ Action Required: Review and Return items</h2>
+          <h2 style="color: #2fd33dff; margin-bottom: 5px;">⚠️ Action Required: Review and Return items</h2>
           <p style="color: #757575; font-size: 14px;">Reference Number: <strong>${
             request.refNo
           }</strong></p>
@@ -1134,7 +1134,7 @@ const Dispatch = () => {
         <!-- Alert Box -->
         <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
           <p style="margin: 0; color: #856404; font-size: 14px; font-weight: bold;">
-            âš¡ Urgent: Please review and return the items listed below
+            ⚡ Urgent: Please review and return the items listed below
           </p>
         </div>
         
@@ -1151,10 +1151,10 @@ const Dispatch = () => {
           <p style="margin-bottom: 15px;"><strong>Please review these items and arrange for their return as soon as possible.</strong></p>
           
           <p style="margin: 0;">
-            ðŸ“ <strong>Current Location:</strong> ${
+            📍 <strong>Current Location:</strong> ${
               request.inLocation || "N/A"
             }<br>
-            ðŸ“… <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
+            📅 <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -1453,19 +1453,19 @@ const Dispatch = () => {
       // Show appropriate messages
       if (emailResult.receiverFound) {
         if (emailResult.emailSent) {
-          showToast(`âœ… Approved! ${emailResult.message}`, "success");
+          showToast(`✅ Approved! ${emailResult.message}`, "success");
         } else {
-          showToast(`âš ï¸ Approved! ${emailResult.message}`, "warning");
+          showToast(`⚠️ Approved! ${emailResult.message}`, "warning");
         }
       } else {
-        showToast(`âŒ Approved! ${emailResult.message}`, "warning");
+        showToast(`❌ Approved! ${emailResult.message}`, "warning");
       }
 
       // Always show main approval success
-      showToast(`âœ… Gate Pass ${item.refNo} has been approved.`, "success");
+      showToast(`✅ Gate Pass ${item.refNo} has been approved.`, "success");
     } catch (error) {
       console.error("Error approving status:", error.message);
-      showToast(`âŒ Approval Failed: ${error.message}`, "error");
+      showToast(`❌ Approval Failed: ${error.message}`, "error");
     }
   };
 

@@ -635,7 +635,7 @@ const ExecutiveApproval = () => {
     }
   };
 
-  // Email sending functions removed â€” all notifications are now sent
+  // Email sending functions removed — all notifications are now sent
   // server-side by backend controllers (sendMail.js)
 
 

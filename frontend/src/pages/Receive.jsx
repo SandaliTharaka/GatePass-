@@ -287,7 +287,7 @@ const Receive = () => {
       .toString()
       .trim()
       .toLowerCase()
-      .replace(/\u2013|\u2014|â€“|â€”/g, "-") // normalize fancy dashes to plain
+      .replace(/\u2013|\u2014|—|—/g, "-") // normalize fancy dashes to plain
       .replace(/\s+/g, " "); // collapse whitespace
 
   // Real-time updates for Receive page (status: 6 = Receiver Pending)
@@ -606,13 +606,13 @@ const Receive = () => {
       return;
     }
     try {
-      // ðŸ”¹ Prepare unloading details object
+      // 🔹 Prepare unloading details object
       let unloadingDetails = {
         unloadingLocation: item.inLocation,
         staffType: staffType,
       };
 
-      // ðŸ”¹ SLT Employee (ERP-based)
+      // 🔹 SLT Employee (ERP-based)
       if (staffType === "SLT") {
         if (!searchedEmployee) {
           showToast(
@@ -622,10 +622,10 @@ const Receive = () => {
           return;
         }
 
-        // âœ… Save ONLY service number (ERP verified)
+        // ✅ Save ONLY service number (ERP verified)
         unloadingDetails.staffServiceNo = searchedEmployee.serviceNo;
       }
-      // ðŸ”¹ Non-SLT Employee
+      // 🔹 Non-SLT Employee
       else {
         if (
           !nonSltStaffDetails.name ||
@@ -646,7 +646,7 @@ const Receive = () => {
         unloadingDetails.nonSLTStaffEmail = nonSltStaffDetails.email;
       }
 
-      // ðŸ”¹ Call backend approve API
+      // 🔹 Call backend approve API
       await approveStatus(
         item.refNo,
         comment,
@@ -1567,7 +1567,7 @@ const RequestDetailsModal = ({
 
       const response = await getEmployeeDetails(serviceId);
 
-      console.log("ERP response:", response); // âœ… keep for debug
+      console.log("ERP response:", response); // ✅ keep for debug
 
       const employee = response?.data?.data?.[0];
 
