@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   createStatus,
   getPendingStatuses,
@@ -20,7 +20,7 @@ import {
   searchReceiverByServiceNo,
   searchEmployeeByServiceNo,
 } from "../services/RequestService";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { useToast } from "../components/ToastProvider.jsx";
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
@@ -287,7 +287,7 @@ const Receive = () => {
       .toString()
       .trim()
       .toLowerCase()
-      .replace(/\u2013|\u2014|–|—/g, "-") // normalize fancy dashes to plain
+      .replace(/\u2013|\u2014|â€“|â€”/g, "-") // normalize fancy dashes to plain
       .replace(/\s+/g, " "); // collapse whitespace
 
   // Real-time updates for Receive page (status: 6 = Receiver Pending)
@@ -606,13 +606,13 @@ const Receive = () => {
       return;
     }
     try {
-      // 🔹 Prepare unloading details object
+      // ðŸ”¹ Prepare unloading details object
       let unloadingDetails = {
         unloadingLocation: item.inLocation,
         staffType: staffType,
       };
 
-      // 🔹 SLT Employee (ERP-based)
+      // ðŸ”¹ SLT Employee (ERP-based)
       if (staffType === "SLT") {
         if (!searchedEmployee) {
           showToast(
@@ -622,10 +622,10 @@ const Receive = () => {
           return;
         }
 
-        // ✅ Save ONLY service number (ERP verified)
+        // âœ… Save ONLY service number (ERP verified)
         unloadingDetails.staffServiceNo = searchedEmployee.serviceNo;
       }
-      // 🔹 Non-SLT Employee
+      // ðŸ”¹ Non-SLT Employee
       else {
         if (
           !nonSltStaffDetails.name ||
@@ -646,7 +646,7 @@ const Receive = () => {
         unloadingDetails.nonSLTStaffEmail = nonSltStaffDetails.email;
       }
 
-      // 🔹 Call backend approve API
+      // ðŸ”¹ Call backend approve API
       await approveStatus(
         item.refNo,
         comment,
@@ -749,13 +749,7 @@ const Receive = () => {
         </div>
       </div>
     `;
-
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Return notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send return email:", error);
@@ -802,12 +796,7 @@ const Receive = () => {
     `;
 
       // Send the email
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Rejection notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
@@ -884,12 +873,7 @@ const Receive = () => {
     `;
 
       // Send the email
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Rejection notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
@@ -1583,7 +1567,7 @@ const RequestDetailsModal = ({
 
       const response = await getEmployeeDetails(serviceId);
 
-      console.log("ERP response:", response); // ✅ keep for debug
+      console.log("ERP response:", response); // âœ… keep for debug
 
       const employee = response?.data?.data?.[0];
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   getPendingStatuses,
   getApprovedStatuses,
@@ -17,7 +17,7 @@ import {
   searchReceiverByServiceNo,
 } from "../services/RequestService.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { useLocation } from "react-router-dom";
@@ -951,7 +951,7 @@ const Dispatch = () => {
         </div>
         
         <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-radius: 4px;">
-          <h4 style="color: #2e7d32; margin-bottom: 10px;">🚚 Next Steps:</h4>
+          <h4 style="color: #2e7d32; margin-bottom: 10px;">ðŸšš Next Steps:</h4>
           <ul style="margin: 0; padding-left: 20px;">
             <li>items will be dispatched from <strong>${
               requestData.outLocation
@@ -981,12 +981,7 @@ const Dispatch = () => {
     `;
 
       // Send the email
-      const result = await emailSent({
-        to: receiverData.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       console.log("Notification email sent to receiver:", receiverData.email);
       return true; // Return true on success
     } catch (error) {
@@ -1088,13 +1083,7 @@ const Dispatch = () => {
         </div>
       </div>
     `;
-
-      await emailSent({
-        to: senderData.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       return true; // Return true if email sent successfully
     } catch (error) {
       console.error("Failed to send rejection email:", error);
@@ -1136,7 +1125,7 @@ const Dispatch = () => {
         
         <!-- Header -->
         <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #2fd33dff; margin-bottom: 5px;">⚠️ Action Required: Review and Return items</h2>
+          <h2 style="color: #2fd33dff; margin-bottom: 5px;">âš ï¸ Action Required: Review and Return items</h2>
           <p style="color: #757575; font-size: 14px;">Reference Number: <strong>${
             request.refNo
           }</strong></p>
@@ -1145,7 +1134,7 @@ const Dispatch = () => {
         <!-- Alert Box -->
         <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
           <p style="margin: 0; color: #856404; font-size: 14px; font-weight: bold;">
-            ⚡ Urgent: Please review and return the items listed below
+            âš¡ Urgent: Please review and return the items listed below
           </p>
         </div>
         
@@ -1162,10 +1151,10 @@ const Dispatch = () => {
           <p style="margin-bottom: 15px;"><strong>Please review these items and arrange for their return as soon as possible.</strong></p>
           
           <p style="margin: 0;">
-            📍 <strong>Current Location:</strong> ${
+            ðŸ“ <strong>Current Location:</strong> ${
               request.inLocation || "N/A"
             }<br>
-            📅 <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
+            ðŸ“… <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -1255,12 +1244,7 @@ const Dispatch = () => {
     `;
 
       // Send the email
-      const result = await emailSent({
-        to: verify.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       console.log("Verify officer notification email sent successfully");
       showToast("Return notification email sent to Verify officer", "success");
 
@@ -1469,19 +1453,19 @@ const Dispatch = () => {
       // Show appropriate messages
       if (emailResult.receiverFound) {
         if (emailResult.emailSent) {
-          showToast(`✅ Approved! ${emailResult.message}`, "success");
+          showToast(`âœ… Approved! ${emailResult.message}`, "success");
         } else {
-          showToast(`⚠️ Approved! ${emailResult.message}`, "warning");
+          showToast(`âš ï¸ Approved! ${emailResult.message}`, "warning");
         }
       } else {
-        showToast(`❌ Approved! ${emailResult.message}`, "warning");
+        showToast(`âŒ Approved! ${emailResult.message}`, "warning");
       }
 
       // Always show main approval success
-      showToast(`✅ Gate Pass ${item.refNo} has been approved.`, "success");
+      showToast(`âœ… Gate Pass ${item.refNo} has been approved.`, "success");
     } catch (error) {
       console.error("Error approving status:", error.message);
-      showToast(`❌ Approval Failed: ${error.message}`, "error");
+      showToast(`âŒ Approval Failed: ${error.message}`, "error");
     }
   };
 
@@ -1639,13 +1623,7 @@ const Dispatch = () => {
         </div>
       </div>
     `;
-
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Return notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send return email:", error);

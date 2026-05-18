@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   getPendingStatuses,
   getApprovedStatuses,
@@ -18,7 +18,7 @@ import {
   searchReceiverByServiceNo,
 } from "../services/RequestService.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { useLocation } from "react-router-dom";
@@ -1288,13 +1288,7 @@ const Verify = () => {
         </div>
       </div>
     `;
-
-      const emailResult = await emailSent({
-        to: petrolLeaderEmail,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       return emailResult;
     } catch (error) {
       console.error("Failed to send approval email to petrol leader:", error);
@@ -1410,13 +1404,7 @@ const Verify = () => {
         </div>
       </div>
     `;
-
-      const emailResult = await emailSent({
-        to: request.receiverDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       return emailResult;
     } catch (error) {
       console.error("Failed to send approval email to receiver:", error);
@@ -1463,7 +1451,7 @@ const Verify = () => {
     // Combine and remove duplicates
     const allEmails = [...new Set([...branchSpecific, ...generalFallbacks])];
 
-    console.log(`📧 Fallback emails for branch "${branch}":`, allEmails);
+    console.log(`ðŸ“§ Fallback emails for branch "${branch}":`, allEmails);
     return allEmails;
   };
 
@@ -1546,13 +1534,7 @@ const Verify = () => {
         </div>
       </div>
     `;
-
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Return notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send return email:", error);
@@ -1594,7 +1576,7 @@ const Verify = () => {
         
         <!-- Header -->
         <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #2fd33dff; margin-bottom: 5px;">⚠️ Action Required: Review and Return items</h2>
+          <h2 style="color: #2fd33dff; margin-bottom: 5px;">âš ï¸ Action Required: Review and Return items</h2>
           <p style="color: #757575; font-size: 14px;">Reference Number: <strong>${
             request.refNo
           }</strong></p>
@@ -1603,7 +1585,7 @@ const Verify = () => {
         <!-- Alert Box -->
         <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
           <p style="margin: 0; color: #856404; font-size: 14px; font-weight: bold;">
-            ⚡ Urgent: Please review and return the items listed below
+            âš¡ Urgent: Please review and return the items listed below
           </p>
         </div>
         
@@ -1618,10 +1600,10 @@ const Verify = () => {
           <p style="margin-bottom: 15px;"><strong>Please review these items and arrange for their return as soon as possible.</strong></p>
           
           <p style="margin: 0;">
-            📍 <strong>Current Location:</strong> ${
+            ðŸ“ <strong>Current Location:</strong> ${
               request.inLocation || "N/A"
             }<br>
-            📅 <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
+            ðŸ“… <strong>Date:</strong> ${new Date().toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",
@@ -1711,12 +1693,8 @@ const Verify = () => {
     `;
 
       // Send the email
-      const result = await emailSent({
-        to: approver.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      const result =
+      // Email notification is sent server-side by the backend controller
       console.log("Executive officer notification email sent successfully");
       showToast(
         "Return notification email sent to executive officer",
@@ -1757,12 +1735,12 @@ const Verify = () => {
           );
           emailCount++;
           successRecipients.push(`Petrol Leader: ${fallbackEmail}`);
-          console.log(`✅ Email sent successfully to: ${fallbackEmail}`);
+          console.log(`âœ… Email sent successfully to: ${fallbackEmail}`);
           fallbackSent = true;
           break; // Stop after first successful fallback
         } catch (fallbackError) {
           console.error(
-            `❌ Fallback email failed for ${fallbackEmail}:`,
+            `âŒ Fallback email failed for ${fallbackEmail}:`,
             fallbackError,
           );
           // Continue to next fallback
@@ -1771,7 +1749,7 @@ const Verify = () => {
 
       if (!fallbackSent) {
         errors.push("All fallback email attempts failed");
-        console.warn("❌ All fallback email attempts failed");
+        console.warn("âŒ All fallback email attempts failed");
       }
 
       // 2. Send email to receiver
@@ -1788,13 +1766,13 @@ const Verify = () => {
           );
         } catch (emailError) {
           console.error(
-            `❌ Failed to send email to receiver ${request.receiverDetails.email}:`,
+            `âŒ Failed to send email to receiver ${request.receiverDetails.email}:`,
             emailError,
           );
           errors.push(`Receiver email failed: ${emailError.message}`);
         }
       } else {
-        console.warn("⚠️ No valid receiver email available");
+        console.warn("âš ï¸ No valid receiver email available");
         errors.push("No valid receiver email available");
       }
 
@@ -1814,20 +1792,20 @@ const Verify = () => {
           );
         } else {
           showToast(
-            `✅ Approval successful! Notifications sent to ${emailCount} recipient(s)`,
+            `âœ… Approval successful! Notifications sent to ${emailCount} recipient(s)`,
             "success",
           );
         }
       } else {
         showToast(
-          "✅ Request approved, but no email notifications could be sent",
+          "âœ… Request approved, but no email notifications could be sent",
           "warning",
         );
       }
     } catch (error) {
-      console.error("❌ Critical error in sendApprovalEmails:", error);
+      console.error("âŒ Critical error in sendApprovalEmails:", error);
       showToast(
-        "✅ Request approved, but email notifications failed. Please contact support.",
+        "âœ… Request approved, but email notifications failed. Please contact support.",
         "error",
       );
       throw error;
@@ -1885,7 +1863,7 @@ const Verify = () => {
       );
 
       console.log(
-        "✅ Request approved in database, now sending notifications...",
+        "âœ… Request approved in database, now sending notifications...",
       );
 
       // Send emails - don't wait for result to block the approval (non-blocking)
@@ -1931,9 +1909,9 @@ const Verify = () => {
         email: "",
       });
 
-      console.log("✅ Approval process completed successfully");
+      console.log("âœ… Approval process completed successfully");
     } catch (error) {
-      console.error("❌ Error approving status:", error.message);
+      console.error("âŒ Error approving status:", error.message);
       showToast("Failed to approve request. Please try again.", "error");
     }
   };
@@ -2009,12 +1987,7 @@ const Verify = () => {
         `;
 
       // Send the email
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Rejection notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
@@ -2097,12 +2070,7 @@ const Verify = () => {
         `;
 
       // Send the email
-      await emailSent({
-        to: approver.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       showToast("Rejection notification email sent to requester", "success");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
@@ -2986,7 +2954,7 @@ const RequestDetailsModal = ({
 
       const response = await getEmployeeDetails(serviceId);
 
-      console.log("ERP response:", response); // ✅ keep for debug
+      console.log("ERP response:", response); // âœ… keep for debug
 
       const employee = response?.data?.data?.[0];
 

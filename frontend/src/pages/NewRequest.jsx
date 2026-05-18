@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useNavigate, Link, Navigate } from "react-router-dom";
 import {
   Package,
@@ -23,7 +23,7 @@ import {
 } from "../services/RequestService.js";
 import axiosInstance from "../services/axiosConfig.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { FileSpreadsheet } from "lucide-react";
 import {
   useItemCategories,
@@ -243,10 +243,10 @@ const NewRequest = () => {
         }
       })
       .catch((error) => {
-        console.error("❌ Error fetching ERP hierarchy:", error);
+        console.error("âŒ Error fetching ERP hierarchy:", error);
 
         // Fallback to old method if ERP fails
-        console.log("⚠️ Falling back to local database");
+        console.log("âš ï¸ Falling back to local database");
         getExecutiveOfficersForNewRequest()
           .then((data) => {
             setExecutiveOfficers(data.officers || []);
@@ -611,124 +611,22 @@ const NewRequest = () => {
     }
   };
 
-  // Add this function to the NewRequest component
-  const sendExecutiveNotificationEmail = async (
-    executiveData,
-    requestData,
-    referenceNumber,
-  ) => {
-    try {
-      if (!executiveData?.email) {
-        showToast("Executive officer email not available", "warning");
-        return;
-      }
-
-      const emailSubject = `New Gate Pass Request ${referenceNumber} - Requires Your Approval`;
-
-      // Create a professional email body with HTML formatting
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #3b82f6; margin-bottom: 5px;">New Gate Pass Request</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${referenceNumber}</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-          <p>Dear ${executiveData.name},</p>
-          <p>A new gate pass request has been submitted and <strong>requires your approval</strong>.</p>
-          
-          <div style="margin-top: 15px;">
-            <p><strong>Request Details:</strong></p>
-            <ul style="padding-left: 20px;">
-              <li>From: ${user?.name} (${user?.serviceNo})</li>
-              <li>From Location: ${outLocation}</li>
-              <li>To Location: ${inLocation}</li>
-              <li>Items: ${items.length} item(s)</li>
-              <li>Date: ${new Date().toLocaleString()}</li>
-            </ul>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Item Summary</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr style="background-color: #f5f5f5;">
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Item</th>
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Serial No</th>
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Category</th>
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Status</th>
-            </tr>
-            ${items
-              .map(
-                (item) => `
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.itemDescription
-                }</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.serialNumber
-                }</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.categoryDescription
-                }</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.returnable === "Yes" ? "Returnable" : "Non-Returnable"
-                }</td>
-              </tr>
-            `,
-              )
-              .join("")}
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <p>Please review this request at your earliest convenience by logging into the Gate Pass Management System.</p>
-          <div style="text-align: center; margin-top: 20px;">
-            <a href="${
-              window.location.origin
-            }/executive-approval" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">Review Request</a>
-          </div>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>© ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      // Send the email
-      await emailSent({
-        to: executiveData.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Notification email sent to executive officer", "success");
-    } catch (error) {
-      console.error("Failed to send notification email:", error);
-      showToast(
-        "Failed to send notification email to executive officer",
-        "warning",
-      );
-    }
-  };
-
+  
   const handleSubmit = async () => {
     try {
-      // ⭐ VALIDATION 1: Check if items exist
+      // â­ VALIDATION 1: Check if items exist
       if (items.length === 0) {
         showToast("Please add at least one item before submitting", "warning");
         return;
       }
 
-      // ⭐ VALIDATION 2: Check executive officer
+      // â­ VALIDATION 2: Check executive officer
       if (!executiveOfficer || !executiveOfficer.trim()) {
         showToast("Please select an executive officer", "warning");
         return;
       }
 
-      // ⭐ VALIDATION 3: Check for any validation errors
+      // â­ VALIDATION 3: Check for any validation errors
       const hasValidationErrors =
         vehicleNumberError ||
         companyNameError ||
@@ -950,7 +848,7 @@ const NewRequest = () => {
         }
       }
 
-      // ⭐ All validations passed - proceed with form submission
+      // â­ All validations passed - proceed with form submission
       const formData = new FormData();
 
       // For Non-SLT destinations
@@ -968,7 +866,7 @@ const NewRequest = () => {
       // Add destination type flag
       formData.append("isNonSltPlace", destinationType === "non-slt");
 
-      // ⭐ FIX: Add receiverAvailable flag
+      // â­ FIX: Add receiverAvailable flag
       // Determine if receiver is available based on destination type and whether details exist
       let receiverAvailable = false;
 
@@ -1001,7 +899,7 @@ const NewRequest = () => {
         }
       }
 
-      // ⭐ CRITICAL: Append the receiverAvailable flag
+      // â­ CRITICAL: Append the receiverAvailable flag
       formData.append("receiverAvailable", receiverAvailable);
 
       // Add transport details
@@ -1094,26 +992,7 @@ const NewRequest = () => {
         `Request created successfully! Reference: ${response.referenceNumber}`,
         "success",
       );
-
-      // Send notification email to executive officer
-      try {
-        const selectedOfficer = executiveOfficers.find(
-          (officer) => officer.serviceNo === executiveOfficer,
-        );
-
-        if (selectedOfficer) {
-          await sendExecutiveNotificationEmail(
-            selectedOfficer,
-            { outLocation, inLocation, items },
-            response.referenceNumber,
-          );
-        } else {
-          console.error("Selected executive officer not found in the list");
-        }
-      } catch (emailError) {
-        console.error("Error sending notification email:", emailError);
-        // Don't fail the whole request if email fails
-      }
+      // Email notification is sent server-side by the backend controller
     } catch (error) {
       setIsSubmitting(false);
       console.error("Submission error:", error);
@@ -1434,7 +1313,7 @@ const NewRequest = () => {
                   <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                     {execRestriction.reason === "HOLIDAY" && (
                       <>
-                        Only Senior Executives (Grade A.1–A.3) are allowed on
+                        Only Senior Executives (Grade A.1â€“A.3) are allowed on
                         public holidays.
                         {execRestriction.holidayName && (
                           <span className="block mt-1 font-semibold">
@@ -1445,10 +1324,10 @@ const NewRequest = () => {
                     )}
 
                     {execRestriction.reason === "WEEKEND" &&
-                      "Only Senior Executives (Grade A.1–A.3) are allowed on during weekends."}
+                      "Only Senior Executives (Grade A.1â€“A.3) are allowed on during weekends."}
 
                     {execRestriction.reason === "OFF_HOURS" &&
-                      "Only Senior Executives (Grade A.1–A.3) are allowed on outside working hours."}
+                      "Only Senior Executives (Grade A.1â€“A.3) are allowed on outside working hours."}
                   </p>
                 )}
               </div>
@@ -1688,7 +1567,7 @@ const NewRequest = () => {
               {/* Out Location */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Out Location (From – Dispatching Branch)
+                  Out Location (From â€“ Dispatching Branch)
                 </label>
                 {/* Out Location */}
                 <select
@@ -1720,7 +1599,7 @@ const NewRequest = () => {
               {destinationType === "slt" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    In Location (To – Receiving Branch)
+                    In Location (To â€“ Receiving Branch)
                   </label>
                   {/* In Location */}
                   <select
