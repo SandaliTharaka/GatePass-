@@ -141,8 +141,11 @@ app.use((req, res, next) => {
 });
 
 // 8) Static file serving
-app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// In CI/CD with multiple releases, ensure this Uploads directory is symlinked to a shared persistent folder.
+const UPLOADS_DIR = path.resolve(__dirname, "..", "Uploads");
+
+app.use("/api/uploads", express.static(UPLOADS_DIR));
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 // Stricter CORS configuration specifically for authentication endpoints
 // Allows POST for login/register and GET for Azure OAuth URL endpoint
