@@ -8,10 +8,6 @@ const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "mail.slt.com.lk",
   port: parseInt(process.env.EMAIL_PORT, 10) || 25,
   secure: process.env.EMAIL_SECURE === "true", // SSL enabled
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
   tls: {
     // Allow self-signed certificates common on intranet mail servers
     rejectUnauthorized: false,
@@ -36,8 +32,8 @@ transporter.verify((err) => {
  * @param {string} [text]
  */
 async function sendEmail(to, subject, html, text = "") {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.error("[sendEmail] Missing email credentials in .env (EMAIL_USER / EMAIL_PASS)");
+  if (!process.env.EMAIL_USER && !process.env.EMAIL_FROM) {
+    console.error("[sendEmail] Missing sender email in .env (EMAIL_USER or EMAIL_FROM)");
     return;
   }
 
