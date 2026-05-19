@@ -310,7 +310,6 @@ const updateApproved = async (req, res) => {
         emitRequestApproval(io, latest.request, "Pleader");
       }
 
-      // No email needed - this is the final step for Non-SLT
       await newStatus.populate("request");
       return res.status(200).json({ ok: true, status: newStatus });
     }
@@ -349,6 +348,11 @@ const updateApproved = async (req, res) => {
           "Email (Dispatch→Dispatcher for no receiver) failed:",
           mailErr,
         );
+      }
+
+      const io = req.app.get("io");
+      if (io && latest.request) {
+        emitRequestApproval(io, latest.request, "Pleader");
       }
 
       await newStatus.populate("request");
@@ -394,6 +398,11 @@ const updateApproved = async (req, res) => {
         }
       } catch (mailErr) {
         console.error("Email (Dispatch→Receiver) failed:", mailErr);
+      }
+
+      const io = req.app.get("io");
+      if (io && latest.request) {
+        emitRequestApproval(io, latest.request, "Pleader");
       }
 
       await newStatus.populate("request");
@@ -485,6 +494,11 @@ const updateRejected = async (req, res) => {
       }
     } catch (err) {
       console.error("Email (reject → requester) failed:", err);
+    }
+
+    const io = req.app.get("io");
+    if (io && latest.request) {
+      emitRequestRejection(io, latest.request, "Pleader");
     }
 
     return res.status(200).json({ ok: true, status: newStatus });

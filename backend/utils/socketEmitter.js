@@ -1,3 +1,47 @@
+const {
+  buildWorkflowNotificationPlan,
+  createAudienceNotification,
+} = require("../services/notificationService");
+
+const queueAudienceNotifications = (io, request, eventType, actorRole = "") => {
+  if (!io || !request) return;
+
+  buildWorkflowNotificationPlan(request, eventType, actorRole)
+    .then(({ notification, audiences }) => {
+      if (!audiences.length) {
+        console.warn("No notification audience resolved:", {
+          eventType,
+          actorRole,
+          referenceNumber: request.referenceNumber || request.refNo,
+          executiveOfficerServiceNo: request.executiveOfficerServiceNo,
+          employeeServiceNo: request.employeeServiceNo,
+          receiverServiceNo: request.receiverServiceNo,
+          status: request.status,
+        });
+      }
+
+      audiences.forEach((audience) => {
+        createAudienceNotification(io, audience, notification).catch((error) => {
+          console.error("Failed to create notification:", {
+            error: error.message,
+            eventType,
+            actorRole,
+            audience,
+            referenceNumber: request.referenceNumber || request.refNo,
+          });
+        });
+      });
+    })
+    .catch((error) => {
+      console.error("Failed to build notification plan:", {
+        error: error.message,
+        eventType,
+        actorRole,
+        referenceNumber: request.referenceNumber || request.refNo,
+      });
+    });
+};
+
 const emitRequestUpdate = (io, request, eventType = "request-updated") => {
   if (!io || !request) return;
 
@@ -36,6 +80,10 @@ const emitRequestUpdate = (io, request, eventType = "request-updated") => {
   if (request.inLocation) {
     io.to(`branch-${request.inLocation}`).emit(eventType, payload);
   }
+
+  if (!["request-approved", "request-rejected"].includes(eventType)) {
+    queueAudienceNotifications(io, request, eventType);
+  }
 };
 
 /**
@@ -69,6 +117,13 @@ const emitNewRequest = (io, request) => {
  */
 const emitRequestApproval = (io, request, approverRole) => {
   emitRequestUpdate(io, request, "request-approved");
+  queueAudienceNotifications(io, request, "request-approved", approverRole);
+  
+  // Per user request, when sender side Patrol leader or Security Officer verifies (Verifier),
+  // show notification to BOTH Security Officer (Dispatch panel) AND Receiver
+  if (approverRole === "Verifier") {
+    queueAudienceNotifications(io, request, "ready-for-receiving");
+  }
 };
 
 /**
@@ -76,6 +131,7 @@ const emitRequestApproval = (io, request, approverRole) => {
  */
 const emitRequestRejection = (io, request, rejecterRole) => {
   emitRequestUpdate(io, request, "request-rejected");
+  queueAudienceNotifications(io, request, "request-rejected", rejecterRole);
 };
 
 /**
@@ -91,9 +147,15 @@ const emitRequestCompletion = (io, request) => {
 const emitNotification = (io, serviceNo, notification) => {
   if (!io || !serviceNo) return;
 
-  io.to(`user-${serviceNo}`).emit("notification", {
-    ...notification,
-    timestamp: new Date(),
+  createAudienceNotification(
+    io,
+    { recipientServiceNo: serviceNo },
+    {
+      ...notification,
+      timestamp: new Date(),
+    },
+  ).catch((error) => {
+    console.error("Failed to create user notification:", error);
   });
 };
 

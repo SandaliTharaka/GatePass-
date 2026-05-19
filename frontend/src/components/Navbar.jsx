@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   LogOut,
   Menu,
   X,
-  User,
   MapPin,
   Briefcase,
   ChevronDown,
@@ -12,6 +11,24 @@ import loginImage from "../assets/SLTMobitel_Logo.svg";
 import transzentLogo from "../assets/transzent-logo.png";
 import { useLocation, useNavigate, Link, NavLink } from "react-router-dom";
 import { useToast } from "../components/ToastProvider";
+import NotificationPanel from "./NotificationPanel";
+import { useSocket } from "../contexts/SocketContext";
+
+const getServiceNoVariants = (serviceNo) => {
+  const raw = String(serviceNo || "").trim();
+  if (!raw) return [];
+
+  const noLeadingZeros = raw.replace(/^0+/, "") || raw;
+  const variants = new Set([raw, noLeadingZeros]);
+
+  if (/^\d+$/.test(noLeadingZeros)) {
+    [4, 5, 6, 7, 8].forEach((length) => {
+      variants.add(noLeadingZeros.padStart(length, "0"));
+    });
+  }
+
+  return Array.from(variants);
+};
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -23,7 +40,11 @@ const Navbar = () => {
   const [userBranch, setUserBranch] = useState("");
   const [userServiceNo, setUserServiceNo] = useState("");
   const { showToast } = useToast();
+  const { isConnected, joinUserRoom, joinRoleRoom, joinBranchRoom } =
+    useSocket();
   const userMenuRef = useRef(null);
+  const isLoginPage = location.pathname === "/";
+  const logoTargetPath = isLoginPage ? "/" : "/myrequests";
 
   useEffect(() => {
     const storedRole = localStorage.getItem("role");
@@ -52,6 +73,45 @@ const Navbar = () => {
       }
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (isLoginPage || !isConnected) return;
+
+    const storedRole = localStorage.getItem("role");
+    const storedUser = localStorage.getItem("user");
+
+    if (storedRole) {
+      joinRoleRoom(storedRole.trim());
+    }
+
+    if (!storedUser) return;
+
+    try {
+      const user = JSON.parse(storedUser);
+      const serviceNo = user.serviceNo || user.userId;
+
+      if (serviceNo) {
+        getServiceNoVariants(serviceNo).forEach((variant) => {
+          joinUserRoom(variant);
+        });
+      }
+
+      if (Array.isArray(user.branches)) {
+        user.branches.forEach((branch) => joinBranchRoom(branch));
+      } else if (user.branches) {
+        joinBranchRoom(user.branches);
+      }
+    } catch (error) {
+      console.error("Error joining notification rooms:", error);
+    }
+  }, [
+    isConnected,
+    isLoginPage,
+    joinBranchRoom,
+    joinRoleRoom,
+    joinUserRoom,
+    location.pathname,
+  ]);
 
   // Fetch branch name from erplocations when user branch ID is available
   useEffect(() => {
@@ -109,9 +169,6 @@ const Navbar = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-
-  const isLoginPage = location.pathname === "/";
-  const logoTargetPath = isLoginPage ? "/" : "/myrequests";
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -284,7 +341,8 @@ const Navbar = () => {
 
           {/* Right side - User Profile Dropdown */}
           {!isLoginPage && (
-            <div className="hidden md:flex items-center ml-auto flex-shrink-0">
+            <div className="hidden md:flex items-center gap-3 ml-auto flex-shrink-0">
+              <NotificationPanel />
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -394,6 +452,12 @@ const Navbar = () => {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {!isLoginPage && (
+            <div className="md:hidden ml-auto mr-2">
+              <NotificationPanel />
             </div>
           )}
 

@@ -1,9 +1,10 @@
-import React, {
+import {
   createContext,
   useContext,
   useEffect,
   useState,
   useRef,
+  useCallback,
 } from "react";
 import { io } from "socket.io-client";
 
@@ -71,7 +72,7 @@ export const SocketProvider = ({ children }) => {
       setIsConnected(false);
     });
 
-    newSocket.on("reconnect", (attemptNumber) => {
+    newSocket.on("reconnect", () => {
       // Successfully reconnected
     });
 
@@ -83,23 +84,23 @@ export const SocketProvider = ({ children }) => {
     };
   }, []);
 
-  const joinUserRoom = (serviceNo) => {
+  const joinUserRoom = useCallback((serviceNo) => {
     if (socket && serviceNo) {
       socket.emit("join-user-room", serviceNo);
     }
-  };
+  }, [socket]);
 
-  const joinRoleRoom = (role) => {
+  const joinRoleRoom = useCallback((role) => {
     if (socket && role) {
       socket.emit("join-role-room", role);
     }
-  };
+  }, [socket]);
 
-  const joinBranchRoom = (branch) => {
+  const joinBranchRoom = useCallback((branch) => {
     if (socket && branch) {
       socket.emit("join-branch-room", branch);
     }
-  };
+  }, [socket]);
 
   const value = {
     socket,
