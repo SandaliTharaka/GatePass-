@@ -333,7 +333,7 @@ exports.updateApproved = async (req, res) => {
         const subject = `Gate Pass needs verification: ${referenceNumber}`;
         const html = `
           <p>Dear ${verifier.name || "Verifier"},</p>
-          <p>A gate pass was <b>approved by the Executive Officer</b> and is awaiting your verification.</p>
+          <p>A gate pass was <b>approved by the Executive Officer ${req.user?.name || ""}</b> and is awaiting your verification.</p>
           <p><b>Reference:</b> ${referenceNumber}<br/>
              <b>Out-location (Sender):</b> ${outLocation || "-"}<br/>
              ${destinationInfo}<br/>
@@ -452,7 +452,7 @@ exports.updateRejected = async (req, res) => {
     try {
       const requester = await findRequesterFromRequest(status.request);
       if (requester && requester.email) {
-        const subject = `Gate Pass rejected by Executive Officer: ${referenceNumber}`;
+        const subject = `Gate Pass rejected by Executive Officer ${req.user?.name || ""} (${req.user?.serviceNo || ""}): ${referenceNumber}`;
         const html = `
           <p>Dear ${requester.name || "Requester"},</p>
           <p>Your gate pass request has been <b>rejected by the Executive Officer</b>.</p>
