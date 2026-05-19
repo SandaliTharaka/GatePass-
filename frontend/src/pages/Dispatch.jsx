@@ -980,10 +980,21 @@ const Dispatch = () => {
       </div>
     `;
 
-      // Send the email
-      // Email notification is sent server-side by the backend controller
-      console.log("Notification email sent to receiver:", receiverData.email);
-      return true; // Return true on success
+      // Send the email via backend endpoint and surface success/failure
+      try {
+        const resp = await emailSent({
+          to: receiverData.email,
+          subject: emailSubject,
+          html: emailBody,
+        });
+        console.log("Notification email sent to receiver:", receiverData.email, resp?.data);
+        showToast("Notification email sent to receiver", "success");
+        return true;
+      } catch (err) {
+        console.error("Failed to send notification email:", err.message || err);
+        showToast("Failed to send receiver notification email.", "error");
+        return false;
+      }
     } catch (error) {
       console.error("Failed to send notification email:", error);
       showToast("Failed to send receiver notification email.", "error");
