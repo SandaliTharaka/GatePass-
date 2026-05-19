@@ -14,12 +14,15 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify SMTP connection on startup (non-blocking)
+// Track SMTP availability and verify connection on startup (non-blocking)
+let smtpAvailable = false;
 transporter.verify((err) => {
   if (err) {
+    smtpAvailable = false;
     console.error("[sendEmail] ⚠️  SMTP connection failed:", err.message);
     console.error("[sendEmail] Emails will NOT be sent until this is resolved.");
   } else {
+    smtpAvailable = true;
     console.log("[sendEmail] ✅ SMTP connection verified — ready to send mail");
   }
 });
@@ -33,8 +36,15 @@ transporter.verify((err) => {
  */
 async function sendEmail(to, subject, html, text = "") {
   if (!process.env.EMAIL_USER && !process.env.EMAIL_FROM) {
-    console.error("[sendEmail] Missing sender email in .env (EMAIL_USER or EMAIL_FROM)");
-    return;
+    const msg = "Missing sender email in environment (EMAIL_USER or EMAIL_FROM)";
+    console.error("[sendEmail]", msg);
+    throw new Error(msg);
+  }
+
+  if (!smtpAvailable) {
+    const msg = "SMTP server not available or connection failed";
+    console.error("[sendEmail]", msg);
+    throw new Error(msg);
   }
 
   try {
@@ -46,8 +56,11 @@ async function sendEmail(to, subject, html, text = "") {
       html,
     });
     console.log("[sendEmail] Sent:", info.messageId, "→", to);
+    return info;
   } catch (err) {
     console.error("[sendEmail] Failed:", err.message);
+    // Re-throw so callers can detect failures and act (and surface to UI)
+    throw err;
   }
 }
 
