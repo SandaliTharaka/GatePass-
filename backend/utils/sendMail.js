@@ -16,13 +16,16 @@ const transporter = nodemailer.createTransport({
 
 // Track SMTP availability and verify connection on startup (non-blocking)
 let smtpAvailable = false;
+let lastSmtpError = null;
 transporter.verify((err) => {
   if (err) {
     smtpAvailable = false;
+    lastSmtpError = err.message;
     console.error("[sendEmail] ⚠️  SMTP connection failed:", err.message);
     console.error("[sendEmail] Emails will NOT be sent until this is resolved.");
   } else {
     smtpAvailable = true;
+    lastSmtpError = null;
     console.log("[sendEmail] ✅ SMTP connection verified — ready to send mail");
   }
 });
@@ -59,9 +62,19 @@ async function sendEmail(to, subject, html, text = "") {
     return info;
   } catch (err) {
     console.error("[sendEmail] Failed:", err.message);
+    // Record last error for health checks
+    lastSmtpError = err.message;
     // Re-throw so callers can detect failures and act (and surface to UI)
     throw err;
   }
 }
 
-module.exports = { sendEmail };
+function isSmtpAvailable() {
+  return smtpAvailable;
+}
+
+function getLastSmtpError() {
+  return lastSmtpError;
+}
+
+module.exports = { sendEmail, isSmtpAvailable, getLastSmtpError };
