@@ -467,7 +467,8 @@ const updateRejected = async (req, res) => {
       await latest.request.save();
     }
 
-    // Notify requester only (safe)
+    // Notify requester only (safe) and capture email result
+    const emailResults = [];
     try {
       if (latest.request) {
         const requester = await findRequesterFromRequest(latest.request);
@@ -480,14 +481,20 @@ const updateRejected = async (req, res) => {
         <p><b>Reason:</b> ${comment.trim()}</p>
         <p>You can view this under <i>My Requests – Rejected</i>.</p>
       `;
-          await sendEmail(requester.email, subject, html);
+          try {
+            const info = await sendEmail(requester.email, subject, html);
+            emailResults.push({ to: requester.email, ok: true, info });
+          } catch (err) {
+            console.error("Email (reject → requester) failed:", err);
+            emailResults.push({ to: requester.email, ok: false, error: String(err) });
+          }
         }
       }
     } catch (err) {
-      console.error("Email (reject → requester) failed:", err);
+      console.error("Email lookup (reject → requester) failed:", err);
     }
 
-    return res.status(200).json({ ok: true, status: newStatus });
+    return res.status(200).json({ ok: true, status: newStatus, emailResults });
   } catch (error) {
     console.error("Pleader reject failed:", error);
     return res.status(500).json({ message: "Server error" });

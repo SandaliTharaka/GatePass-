@@ -564,6 +564,9 @@ exports.updateApproved = async (req, res) => {
       };
     }
 
+    // Collect email send results to return to caller
+    const emailResults = [];
+
     // If Non-SLT destination, route to PL2 (Dispatch) at outLocation
     // Non-SLT requests should stop at Dispatch and NOT go to receiver
     if (isNonSltPlace) {
@@ -595,16 +598,22 @@ exports.updateApproved = async (req, res) => {
             <p><b>Note:</b> This is a Non-SLT request. After your approval, this will be marked as dispatched (final step).</p>
             <p>Please check your Dispatch page.</p>
           `;
-          await sendEmail(pleader.email, subject, html);
+          try {
+            const info = await sendEmail(pleader.email, subject, html);
+            emailResults.push({ to: pleader.email, ok: true, info });
+          } catch (mailErr) {
+            console.error("Email (Verifier→Dispatch for Non-SLT) failed:", mailErr);
+            emailResults.push({ to: pleader.email, ok: false, error: String(mailErr) });
+          }
         }
       } catch (mailErr) {
-        console.error("Email (Verifier→Dispatch for Non-SLT) failed:", mailErr);
+        console.error("Email lookup (Verifier→Dispatch for Non-SLT) failed:", mailErr);
       }
 
       const fresh = await Status.findById(status._id)
         .populate("request")
         .lean();
-      return res.json(fresh);
+      return res.json({ ...fresh, emailResults });
     }
 
     // For SLT Branch destinations, route to Dispatch (PL2) first
@@ -654,10 +663,16 @@ exports.updateApproved = async (req, res) => {
              <b>To:</b> ${status.request.inLocation || "-"}</p>
           <p>Please check your Dispatch page to approve and route to the receiver.</p>
         `;
-        await sendEmail(pleader.email, subject, html);
+        try {
+          const info = await sendEmail(pleader.email, subject, html);
+          emailResults.push({ to: pleader.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Verifier→Dispatch) failed:", mailErr);
+          emailResults.push({ to: pleader.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Verifier→Dispatch) failed:", mailErr);
+      console.error("Email lookup (Verifier→Dispatch) failed:", mailErr);
     }
 
     const fresh = await Status.findById(status._id).populate("request").lean();
@@ -668,7 +683,7 @@ exports.updateApproved = async (req, res) => {
       emitRequestApproval(io, fresh.request, "Verifier");
     }
 
-    return res.json(fresh);
+    return res.json({ ...fresh, emailResults });
   } catch (err) {
     console.error("Verifier approve error:", err);
     if (err?.name === "ValidationError") {
@@ -774,7 +789,8 @@ exports.updateRejected = async (req, res) => {
     await status.save();
     console.log("Saved status with rejectedByBranch:", status.rejectedByBranch);
 
-    // Email Requester
+    // Email Requester + Executive Officer (collect results)
+    const emailResults = [];
     try {
       const requester = await findRequesterFromRequest(status.request);
       if (requester && requester.email) {
@@ -786,13 +802,18 @@ exports.updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${status.verifyOfficerComment}</p>
           <p>You can view this under <i>My Requests – Rejected</i>.</p>
         `;
-        await sendEmail(requester.email, subject, html);
+        try {
+          const info = await sendEmail(requester.email, subject, html);
+          emailResults.push({ to: requester.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Verifier reject→Requester) failed:", mailErr);
+          emailResults.push({ to: requester.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Verifier reject→Requester) failed:", mailErr);
+      console.error("Email lookup (Verifier reject→Requester) failed:", mailErr);
     }
 
-    // Email Executive Officer (FYI)
     try {
       const exec = await findExecutiveFromRequest(status.request);
       if (exec && exec.email) {
@@ -804,10 +825,16 @@ exports.updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${status.verifyOfficerComment}</p>
           <p>This will be visible under your Rejected section for tracking.</p>
         `;
-        await sendEmail(exec.email, subject, html);
+        try {
+          const info = await sendEmail(exec.email, subject, html);
+          emailResults.push({ to: exec.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Verifier reject→Executive) failed:", mailErr);
+          emailResults.push({ to: exec.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Verifier reject→Executive) failed:", mailErr);
+      console.error("Email lookup (Verifier reject→Executive) failed:", mailErr);
     }
 
     const fresh = await Status.findById(status._id).populate("request").lean();
@@ -818,7 +845,7 @@ exports.updateRejected = async (req, res) => {
       emitRequestRejection(io, fresh.request, "Verifier");
     }
 
-    return res.json(fresh);
+    return res.json({ ...fresh, emailResults });
   } catch (err) {
     console.error("Verifier reject error:", err);
     return res.status(500).json({ message: "Internal server error" });
