@@ -873,133 +873,10 @@ const Dispatch = () => {
     requestData,
     referenceNumber,
   ) => {
-    try {
-      if (!receiverData?.email) {
-        console.warn(
-          "Receiver email not available for notification:",
-          receiverData,
-        );
-        showToast("Receiver email not available for notification.", "warning");
-        return false; // Return false instead of void
-      }
-
-      const emailSubject = `Gate Pass Request ${referenceNumber} - Approved by Dispatch`;
-
-      // Create a more detailed email body
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <img src="${logoUrl}" alt="SLT Logo" style="max-height: 60px; margin-bottom: 10px;" />
-          <h2 style="color: #3b82f6; margin-bottom: 5px;">Gate Pass Request Approved</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${referenceNumber}</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f0f9ff; border-radius: 4px; border-left: 4px solid #3b82f6;">
-          <p>Dear ${receiverData.name},</p>
-          <p>The gate pass request has been <strong>APPROVED</strong> by the Dispatch Officer and is ready for collection/delivery.</p>
-          
-          <div style="margin-top: 15px;">
-            <p><strong>Summary:</strong></p>
-            <ul style="padding-left: 20px; margin: 0;">
-              <li><strong>Reference:</strong> ${referenceNumber}</li>
-              <li><strong>From:</strong> ${requestData.outLocation}</li>
-              <li><strong>To:</strong> ${requestData.inLocation}</li>
-              <li><strong>items Count:</strong> ${requestData.items.length}</li>
-              <li><strong>Approval Date:</strong> ${new Date().toLocaleString()}</li>
-            </ul>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">item Details</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">item</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Serial Number</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Category</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${requestData.items
-                .map(
-                  (item) => `
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                    item.itemDescription
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                    item.serialNumber || "-"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                    item.categoryDescription || "-"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">
-                    <span style="color: ${
-                      item.itemReturnable ? "#10b981" : "#f59e0b"
-                    }; font-weight: bold;">
-                      ${item.itemReturnable ? "Returnable" : "Non-Returnable"}
-                    </span>
-                  </td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-radius: 4px;">
-          <h4 style="color: #2e7d32; margin-bottom: 10px;">🚚 Next Steps:</h4>
-          <ul style="margin: 0; padding-left: 20px;">
-            <li>items will be dispatched from <strong>${
-              requestData.outLocation
-            }</strong></li>
-            <li>Expected delivery/collection at <strong>${
-              requestData.inLocation
-            }</strong></li>
-            <li>Please be available to receive the items</li>
-            <li>Check all items upon receipt</li>
-          </ul>
-        </div>
-        
-        <div style="margin-bottom: 20px; text-align: center;">
-          <p>You can view the complete gate pass details in the system:</p>
-          <a href="${window.location.origin}/dispatch" 
-             style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block; margin-top: 10px;">
-            View Gate Pass Details
-          </a>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p><strong>Important:</strong> Please bring this reference number when collecting items.</p>
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      // Send the email via backend endpoint and surface success/failure
-      try {
-        const resp = await emailSent({
-          to: receiverData.email,
-          subject: emailSubject,
-          html: emailBody,
-        });
-        console.log("Notification email sent to receiver:", receiverData.email, resp?.data);
-        showToast("Notification email sent to receiver", "success");
-        return true;
-      } catch (err) {
-        console.error("Failed to send notification email:", err.message || err);
-        showToast("Failed to send receiver notification email.", "error");
-        return false;
-      }
-    } catch (error) {
-      console.error("Failed to send notification email:", error);
-      showToast("Failed to send receiver notification email.", "error");
-      return false; // Return false on failure
-    }
+    // Manual email sending is disabled. Notifications are sent by the server.
+    console.info("Manual receiver email disabled; server will send notifications.");
+    showToast("Notifications are sent automatically by the system.", "info");
+    return true;
   };
 
   const sendRejectionEmailToSender = async (
@@ -1094,8 +971,9 @@ const Dispatch = () => {
         </div>
       </div>
     `;
-      // Email notification is sent server-side by the backend controller
-      return true; // Return true if email sent successfully
+      // Manual email disabled — server sends notifications instead
+      showToast("Notifications are sent automatically by the system.", "info");
+      return true;
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       return false; // Return false if email failed
@@ -1254,12 +1132,10 @@ const Dispatch = () => {
       </div>
     `;
 
-      // Send the email
-      // Email notification is sent server-side by the backend controller
-      console.log("Verify officer notification email sent successfully");
-      showToast("Return notification email sent to Verify officer", "success");
-
-      return result;
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual petrol leader email disabled; server will notify.");
+      showToast("Notifications are sent automatically by the system.", "info");
+      return true;
     } catch (error) {
       console.error("Failed to send return email to verify officer:", error);
       showToast("Failed to send email to verify officer", "error");
@@ -1455,25 +1331,18 @@ const Dispatch = () => {
         itemReceiver: item?.receiverDetails?.serviceNo,
       });
 
-      // Handle email notification
-      const emailResult = await handleEmailNotification(
-        statusData.request, // Pass the entire request object
-        approvedDESCRIPTION,
-      );
-
-      // Show appropriate messages
-      if (emailResult.receiverFound) {
-        if (emailResult.emailSent) {
-          showToast(`✅ Approved! ${emailResult.message}`, "success");
-        } else {
-          showToast(`⚠️ Approved! ${emailResult.message}`, "warning");
-        }
+      // Show result and notification status returned from server
+      const emailResults = statusData.emailResults || [];
+      if (emailResults.length === 0) {
+        showToast(`✅ Gate Pass ${item.refNo} has been approved. Notifications handled by system.`, "success");
       } else {
-        showToast(`❌ Approved! ${emailResult.message}`, "warning");
+        const failed = emailResults.filter((r) => !r.ok);
+        if (failed.length > 0) {
+          showToast(`✅ Approved. ${failed.length} notification(s) failed.`, "warning");
+        } else {
+          showToast(`✅ Approved and all notifications sent.`, "success");
+        }
       }
-
-      // Always show main approval success
-      showToast(`✅ Gate Pass ${item.refNo} has been approved.`, "success");
     } catch (error) {
       console.error("Error approving status:", error.message);
       showToast(`❌ Approval Failed: ${error.message}`, "error");

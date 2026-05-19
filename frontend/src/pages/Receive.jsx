@@ -795,19 +795,9 @@ const Receive = () => {
       </div>
     `;
 
-      // Send the email via backend endpoint and surface result
-      try {
-        const resp = await emailSent({
-          to: request.senderDetails.email,
-          subject: emailSubject,
-          html: emailBody,
-        });
-        console.log("Completion email sent to requester:", resp?.data);
-        showToast("Completion notification email sent to requester", "success");
-      } catch (err) {
-        console.error("Failed to send completion email:", err.message || err);
-        showToast("Failed to send completion notification email", "error");
-      }
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual completion notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");

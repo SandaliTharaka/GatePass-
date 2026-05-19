@@ -1534,19 +1534,9 @@ const Verify = () => {
         </div>
       </div>
     `;
-      // Send the email via backend endpoint and surface result
-      try {
-        const resp = await emailSent({
-          to: request.senderDetails?.email,
-          subject: `Returnable items Update - ${request.refNo}`,
-          html: emailBody,
-        });
-        console.log("Return notification email sent to requester", resp?.data);
-        showToast("Return notification email sent to requester", "success");
-      } catch (err) {
-        console.error("Failed to send return email:", err.message || err);
-        showToast("Failed to send return email", "error");
-      }
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual return notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send return email:", error);
       showToast("Failed to send return email", "error");
@@ -1703,21 +1693,10 @@ const Verify = () => {
       </div>
     `;
 
-      // Send the email via backend endpoint and surface result
-      try {
-        const result = await emailSent({
-          to: approver.email,
-          subject: emailSubject,
-          html: emailBody,
-        });
-        console.log("Executive officer notification email sent successfully", result?.data);
-        showToast("Return notification email sent to executive officer", "success");
-        return result;
-      } catch (err) {
-        console.error("Failed to send return email to executive officer:", err.message || err);
-        showToast("Failed to send email to executive officer", "error");
-        throw err;
-      }
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual executive notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
+      return true;
     } catch (error) {
       console.error("Failed to send return email to executive officer:", error);
       showToast("Failed to send email to executive officer", "error");
@@ -2002,19 +1981,9 @@ const Verify = () => {
           </div>
         `;
 
-      // Send the email via backend endpoint and surface result
-      try {
-        const resp = await emailSent({
-          to: request.senderDetails?.email,
-          subject: emailSubject,
-          html: emailBody,
-        });
-        console.log("Rejection email sent to requester", resp?.data);
-        showToast("Rejection notification email sent to requester", "success");
-      } catch (err) {
-        console.error("Failed to send rejection email:", err.message || err);
-        showToast("Failed to send rejection email", "error");
-      }
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual rejection notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");
@@ -2095,19 +2064,9 @@ const Verify = () => {
           </div>
         `;
 
-      // Send the email to approver via backend endpoint and surface result
-      try {
-        const resp = await emailSent({
-          to: approver.email,
-          subject: emailSubject,
-          html: emailBody,
-        });
-        console.log("Rejection email sent to approver", resp?.data);
-        showToast("Rejection notification email sent to approver", "success");
-      } catch (err) {
-        console.error("Failed to send rejection email:", err.message || err);
-        showToast("Failed to send rejection email", "error");
-      }
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual rejection notification to approver disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");
