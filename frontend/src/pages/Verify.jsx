@@ -1534,8 +1534,19 @@ const Verify = () => {
         </div>
       </div>
     `;
-      // Email notification is sent server-side by the backend controller
-      showToast("Return notification email sent to requester", "success");
+      // Send the email via backend endpoint and surface result
+      try {
+        const resp = await emailSent({
+          to: request.senderDetails?.email,
+          subject: `Returnable items Update - ${request.refNo}`,
+          html: emailBody,
+        });
+        console.log("Return notification email sent to requester", resp?.data);
+        showToast("Return notification email sent to requester", "success");
+      } catch (err) {
+        console.error("Failed to send return email:", err.message || err);
+        showToast("Failed to send return email", "error");
+      }
     } catch (error) {
       console.error("Failed to send return email:", error);
       showToast("Failed to send return email", "error");
@@ -1692,16 +1703,21 @@ const Verify = () => {
       </div>
     `;
 
-      // Send the email
-      const result =
-      // Email notification is sent server-side by the backend controller
-      console.log("Executive officer notification email sent successfully");
-      showToast(
-        "Return notification email sent to executive officer",
-        "success",
-      );
-
-      return result;
+      // Send the email via backend endpoint and surface result
+      try {
+        const result = await emailSent({
+          to: approver.email,
+          subject: emailSubject,
+          html: emailBody,
+        });
+        console.log("Executive officer notification email sent successfully", result?.data);
+        showToast("Return notification email sent to executive officer", "success");
+        return result;
+      } catch (err) {
+        console.error("Failed to send return email to executive officer:", err.message || err);
+        showToast("Failed to send email to executive officer", "error");
+        throw err;
+      }
     } catch (error) {
       console.error("Failed to send return email to executive officer:", error);
       showToast("Failed to send email to executive officer", "error");
@@ -1986,9 +2002,19 @@ const Verify = () => {
           </div>
         `;
 
-      // Send the email
-      // Email notification is sent server-side by the backend controller
-      showToast("Rejection notification email sent to requester", "success");
+      // Send the email via backend endpoint and surface result
+      try {
+        const resp = await emailSent({
+          to: request.senderDetails?.email,
+          subject: emailSubject,
+          html: emailBody,
+        });
+        console.log("Rejection email sent to requester", resp?.data);
+        showToast("Rejection notification email sent to requester", "success");
+      } catch (err) {
+        console.error("Failed to send rejection email:", err.message || err);
+        showToast("Failed to send rejection email", "error");
+      }
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");
@@ -2069,9 +2095,19 @@ const Verify = () => {
           </div>
         `;
 
-      // Send the email
-      // Email notification is sent server-side by the backend controller
-      showToast("Rejection notification email sent to requester", "success");
+      // Send the email to approver via backend endpoint and surface result
+      try {
+        const resp = await emailSent({
+          to: approver.email,
+          subject: emailSubject,
+          html: emailBody,
+        });
+        console.log("Rejection email sent to approver", resp?.data);
+        showToast("Rejection notification email sent to approver", "success");
+      } catch (err) {
+        console.error("Failed to send rejection email:", err.message || err);
+        showToast("Failed to send rejection email", "error");
+      }
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");
