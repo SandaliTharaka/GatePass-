@@ -2951,7 +2951,7 @@ const RequestDetailsModal = ({
         >
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold text-white flex items-center">
-              <FaBoxOpen className="mr-3" /> Request Details
+              <FaBoxOpen className="mr-3" /> Gate Pass Details
             </h2>
             <button
               onClick={onClose}
@@ -3020,7 +3020,7 @@ const RequestDetailsModal = ({
             }`}
             onClick={() => setCurrentTab("navigation")}
           >
-            <FaCheckCircle className="mr-2" /> Approval
+            <FaCheckCircle className="mr-2" /> Receive
           </button>
         </div>
 
@@ -4569,7 +4569,7 @@ const RequestDetailsModal = ({
             <div className="space-y-6">
               <div className="bg-gray-50 rounded-xl p-6">
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-                  <FaCheckCircle className="mr-2" /> Approval Information
+                  <FaCheckCircle className="mr-2" /> Gate Pass Information
                 </h3>
 
                 <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100 shadow-sm">
