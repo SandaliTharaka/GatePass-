@@ -162,8 +162,6 @@ const fetchOfficerData = async (status) => {
   return { executiveOfficerData, verifyOfficerData };
 };
 
-<<<<<<< Updated upstream
-=======
 // PDF Generator function for Petrol Leader (moved to module level for accessibility)
 const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -536,8 +534,6 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
   doc.save(`SLT_GatePass_${safeRef}.pdf`);
 };
-
->>>>>>> Stashed changes
 const Verify = () => {
   const [activeTab, setActiveTab] = useState("pending");
   const [showModal, setShowModal] = useState(false);
