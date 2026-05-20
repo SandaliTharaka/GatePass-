@@ -2724,6 +2724,33 @@ const RequestDetailsModal = ({
       : ["details", "navigation"];
   const VerifyStatus = true;
 
+  const isNonSltDetailsValid = () => {
+    const requiredFields = [
+      "name",
+      "companyName",
+      "nic",
+      "contactNo",
+      "email",
+    ];
+
+    return requiredFields.every((field) => {
+      const value = nonSltStaffDetails[field]?.toString().trim();
+      return value && !validateField(field, value);
+    });
+  };
+
+  const isReadyForNextTab = () => {
+    if (staffType === "SLT") {
+      return Boolean(searchedEmployee);
+    }
+
+    if (staffType === "Non-SLT") {
+      return isNonSltDetailsValid();
+    }
+
+    return false;
+  };
+
   if (!isOpen || !request) return null;
 
   const handleBulkReturn = async () => {
@@ -4525,7 +4552,7 @@ const RequestDetailsModal = ({
                   {VerifyStatus
                     ? "Verification Details"
                     : "Verification Details"}
-                </h3>
+                </h3> 
 
                 {/* Toggle between SLT and Non-SLT */}
                 <div className="flex space-x-4 mb-6">
@@ -5086,7 +5113,12 @@ const RequestDetailsModal = ({
                   </button>
                   <button
                     onClick={goToNextTab}
-                    className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center"
+                    disabled={currentTab === "loading" && !isReadyForNextTab()}
+                    className={`px-4 py-2 rounded-lg text-white text-sm font-medium flex items-center transition-colors ${
+                      currentTab === "loading" && !isReadyForNextTab()
+                        ? "bg-gray-300 cursor-not-allowed"
+                        : "bg-blue-500 hover:bg-blue-600"
+                    }`}
                   >
                     Next <FaArrowRight className="ml-2" />
                   </button>
