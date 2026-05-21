@@ -1895,729 +1895,225 @@ const RequestDetailsModal = ({
     loadingStaff,
     selectedReturnableDESCRIPTIONs,
   ) => {
-    // Create a temporary iframe to hold the printable content
     const printFrame = document.createElement("iframe");
     printFrame.style.position = "absolute";
     printFrame.style.top = "-9999px";
     document.body.appendChild(printFrame);
 
     const contentDocument = printFrame.contentDocument;
+    const requestCore = request?.requestDetails || request?.request || request;
+    const selectedReturnables =
+      selectedReturnableDESCRIPTIONs?.length > 0
+        ? selectedReturnableDESCRIPTIONs
+        : request?.requestDetails?.returnableDESCRIPTIONs ||
+          request?.returnableDESCRIPTIONs ||
+          [];
 
-    // Create the print content with styling
     contentDocument.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>SLT Gate Pass - ${request.refNo}</title>
+        <title>SLT Gate Pass - ${request?.refNo || "N/A"}</title>
         <style>
-          body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            color: #333;
-          }
-          .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-          }
-          .logo {
-            max-height: 60px;
-            margin-bottom: 10px;
-          }
-          .title {
-            font-size: 24px;
-            color: #003399;
-            margin: 0;
-          }
-          .ref {
-            font-size: 14px;
-            color: #666;
-            margin: 5px 0;
-          }
-          .date {
-            font-size: 12px;
-            color: #888;
-            margin: 5px 0 15px;
-          }
-          .section {
-            margin-bottom: 20px;
-          }
-          .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #eee;
-          }
-          .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-          }
-          .item {
-            margin-bottom: 5px;
-          }
-          .itemComm{
-            margin-bottom: 40px;
-          }
-          .label {
-            font-weight: bold;
-            color: #555;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-          }
-          th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-          }
-          th {
-            background-color: #f5f5f5;
-            font-weight: bold;
-          }
-          .signature-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 20px;
-            margin-top: 40px;
-          }
-          .signature-box {
-            height: 70px;
-            border-bottom: 1px solid #ccc;
-          }
-          .signature-title {
-            text-align: center;
-            font-weight: bold;
-            margin-top: 5px;
-          }
-          .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 10px;
-            color: #999;
-          }
-          @media print {
-            body {
-              margin: 0;
-              padding: 15px;
-            }
-          }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #2c3e50; background: #fff; }
+          .container { max-width: 8.5in; margin: 0 auto; padding: 0.5in; }
+          .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #003399; display: flex; align-items: center; justify-content: space-between; }
+          .header-left { flex: 1; }
+          .header-center { flex: 2; text-align: center; }
+          .header-right { flex: 1; text-align: right; font-size: 11px; }
+          .logo { max-height: 70px; margin-bottom: 5px; }
+          .title { font-size: 26px; font-weight: bold; color: #003399; margin: 5px 0; letter-spacing: 0.5px; }
+          .subtitle { font-size: 12px; color: #666; font-style: italic; }
+          .ref-info { background: #f0f4f8; padding: 8px; margin-top: 5px; border-radius: 4px; font-weight: 600; }
+          .ref { font-size: 12px; color: #003399; margin: 3px 0; }
+          .date { font-size: 11px; color: #999; margin: 3px 0; }
+          .section { page-break-inside: avoid; margin-bottom: 22px; background: #fafbfc; padding: 14px; border-radius: 2px; }
+          .section-title { font-size: 14px; font-weight: bold; color: #003399; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #003399; display: flex; align-items: center; }
+          .section-title::before { content: ''; width: 4px; height: 4px; background: #003399; border-radius: 50%; margin-right: 10px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+          .grid-full { grid-column: 1 / -1; }
+          .item { margin-bottom: 8px; font-size: 11px; }
+          .label { font-weight: 700; color: #003399; display: inline-block; min-width: 120px; }
+          .value { color: #2c3e50; word-break: break-word; }
+          table { width: 100%; border-collapse: collapse; margin: 15px 0; background: #fff; border: 1px solid #ddd; }
+          thead { background: linear-gradient(135deg, #003399 0%, #0047b3 100%); color: #fff; }
+          th { padding: 10px; text-align: left; font-size: 11px; font-weight: 700; border: 1px solid #ddd; }
+          td { padding: 8px 10px; font-size: 10px; border: 1px solid #e5e5e5; color: #444; }
+          tbody tr:nth-child(odd) { background: #f9f9f9; }
+          tbody tr:nth-child(even) { background: #fff; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd; text-align: center; font-size: 9px; color: #999; }
+          @media print { body { margin: 0; padding: 0; } .container { padding: 0; } .section { page-break-inside: avoid; } }
         </style>
       </head>
       <body>
-        <div class="header">
-          <img src=${logoUrl} alt="SLT Logo" class="logo" />
-          <h1 class="title">SLT Gate Pass</h1>
-          <p class="ref">Reference: ${request.refNo}</p>
-          <p class="date">Generated on: ${new Date().toLocaleDateString()}</p>
-        </div>
-        
-        <div class="section">
-          <h2 class="section-title">Sender Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.unLoadUserData?.name || "N/A"
-              }
+        <div class="container">
+          <div class="header">
+            <div class="header-left">
+              <img src=${logoUrl} alt="SLT Logo" class="logo" />
             </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.unLoadUserData?.serviceNo || "N/A"
-              }
+            <div class="header-center">
+              <div class="title">SLT GATE PASS</div>
+              <div class="subtitle">Receiver Copy - Item Receipt Summary</div>
+              <div class="ref-info">
+                <div class="ref">Ref: ${request?.refNo || "N/A"}</div>
+                <div class="date">Generated: ${new Date().toLocaleString()}</div>
+              </div>
             </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.senderDetails?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.senderDetails?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.senderDetails?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.senderDetails?.contactNo || "N/A"
-              }
+            <div class="header-right">
+              <div class="date">Document Type:<br/><strong>Receive Report</strong></div>
             </div>
           </div>
-        </div>
 
-        <div class="section">
-          <h2 class="section-title">Receiver Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.receiverDetails?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.receiverDetails?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.receiverDetails?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.receiverDetails?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.receiverDetails?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.receiverDetails?.contactNo || "N/A"
-              }
+          <div class="section">
+            <h2 class="section-title">REQUEST SUMMARY</h2>
+            <div class="grid">
+              <div class="item"><span class="label">Reference:</span><span class="value">${request?.refNo || "N/A"}</span></div>
+              <div class="item"><span class="label">Date:</span><span class="value">${request?.createdAt ? new Date(request.createdAt).toLocaleDateString() : "N/A"}</span></div>
+              <div class="item"><span class="label">Total Items:</span><span class="value">${request?.items?.length || 0}</span></div>
+              <div class="item"><span class="label">Receiver Status:</span><span class="value">${request?.statusDetails?.statusLabel || "Received/Processing"}</span></div>
             </div>
           </div>
-        </div>
-        
-        <div class="section">
-          <h2 class="section-title">Location Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">From:</span> ${request.outLocation || "N/A"}
-            </div>
-            <div class="item">
-              <span class="label">To:</span> ${request.inLocation || "N/A"}
-            </div>
-          </div>
-        </div>
-        
-        <div class="section">
-          <h2 class="section-title">Transport Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Method:</span> ${
-                request?.transportData?.transportMethod || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Type:</span> ${
-                request?.transportData?.transporterType || "N/A"
-              }
-            </div>
-            ${
-              request?.transportData?.transporterType === "SLT"
-                ? `
-              
-            <div class="item">
-              <span class="label">Transporter:</span> ${
-                transporterDetails?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                transporterDetails?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                transporterDetails?.contactNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                transporterDetails?.section || "N/A"
-              }
-            </div>
-            
-            ${
-              request?.transportData?.transportMethod === "Vehicle"
-                ? `
-            <div class="item">
-              <span class="label">Vehicle No:</span> ${
-                request?.requestDetails?.vehicleNumber || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Vehicle Item Code:</span> ${
-                request?.requestDetails?.vehicleModel || "N/A"
-              }
-            </div>
-            `
-                : ""
-            } 
-            `
-                : `
-            <div class="item">
-              <span class="label">Transporter:</span> ${
-                request?.transportData?.nonSLTTransporterName || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request?.transportData?.nonSLTTransporterEmail || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request?.transportData?.nonSLTTransporterNIC || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request?.transportData?.nonSLTTransporterPhone || "N/A"
-              }
-            </div>
-            
-            ${
-              request?.transportData?.transportMethod === "Vehicle"
-                ? `
-            <div class="item">
-              <span class="label">Vehicle No:</span> ${
-                request?.requestDetails?.vehicleNumber || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Vehicle Item Code:</span> ${
-                request?.requestDetails?.vehicleModel || "N/A"
-              }
-            </div>
-            `
-                : ""
-            }
-            `
-            }
-          </div>
-        </div>
 
-        <div class="section">
-          <h2 class="section-title">Exerctive Officer Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.executiveOfficerData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.executiveOfficerData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.executiveOfficerData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.executiveOfficerData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.executiveOfficerData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.executiveOfficerData?.contactNo || "N/A"
-              }
-            </div>
-            <div class="itemComm">
-              <span class="label">Exerctive Officer Comment:</span> ${
-                request.statusDetails?.executiveOfficerComment || "N/A"
-              }
+          <div class="section">
+            <h2 class="section-title">SENDER DETAILS</h2>
+            <div class="grid">
+              <div class="item"><span class="label">Name:</span><span class="value">${request?.senderDetails?.name || "N/A"}</span></div>
+              <div class="item"><span class="label">Service No:</span><span class="value">${request?.senderDetails?.serviceNo || requestCore?.employeeServiceNo || "N/A"}</span></div>
+              <div class="item"><span class="label">Designation:</span><span class="value">${request?.senderDetails?.designation || "N/A"}</span></div>
+              <div class="item"><span class="label">Section:</span><span class="value">${request?.senderDetails?.section || "N/A"}</span></div>
+              <div class="item"><span class="label">Group:</span><span class="value">${request?.senderDetails?.group || "N/A"}</span></div>
+              <div class="item"><span class="label">Contact:</span><span class="value">${request?.senderDetails?.contactNo || "N/A"}</span></div>
             </div>
           </div>
-        </div>
 
-        <div class="section">
-          <h2 class="section-title">Verify Officer Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.verifyOfficerData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.verifyOfficerData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.verifyOfficerData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.verifyOfficerData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.verifyOfficerData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.verifyOfficerData?.contactNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Verify Officer Comment:</span> ${
-                request.statusDetails?.verifyOfficerComment || "N/A"
+          <div class="section">
+            <h2 class="section-title">RECEIVER DETAILS</h2>
+            <div class="grid">
+              ${
+                request?.isNonSltPlace || requestCore?.isNonSltPlace
+                  ? `
+                  <div class="item"><span class="label">Name:</span><span class="value">${request?.receiverName || requestCore?.receiverName || "N/A"}</span></div>
+                  <div class="item"><span class="label">NIC:</span><span class="value">${request?.receiverNIC || requestCore?.receiverNIC || "N/A"}</span></div>
+                  <div class="item"><span class="label">Contact:</span><span class="value">${request?.receiverContact || requestCore?.receiverContact || "N/A"}</span></div>
+                  <div class="item"><span class="label">Company:</span><span class="value">${request?.companyName || requestCore?.companyName || "N/A"}</span></div>
+                  <div class="item grid-full"><span class="label">Address:</span><span class="value">${request?.companyAddress || requestCore?.companyAddress || "N/A"}</span></div>
+                  `
+                  : `
+                  <div class="item"><span class="label">Name:</span><span class="value">${request?.receiverDetails?.name || "N/A"}</span></div>
+                  <div class="item"><span class="label">Service No:</span><span class="value">${request?.receiverDetails?.serviceNo || requestCore?.receiverServiceNo || "N/A"}</span></div>
+                  <div class="item"><span class="label">Designation:</span><span class="value">${request?.receiverDetails?.designation || "N/A"}</span></div>
+                  <div class="item"><span class="label">Section:</span><span class="value">${request?.receiverDetails?.section || "N/A"}</span></div>
+                  <div class="item"><span class="label">Group:</span><span class="value">${request?.receiverDetails?.group || "N/A"}</span></div>
+                  <div class="item"><span class="label">Contact:</span><span class="value">${request?.receiverDetails?.contactNo || requestCore?.receiverContact || "N/A"}</span></div>
+                  `
               }
             </div>
           </div>
-        </div>
-        
-        <!-- Loading Details Section -->
-    <div class="section">
-      <h2 class="section-title">Loading Details</h2>
-      <div class="grid">
-        <div class="item">
-          <span class="label">Loading Location:</span> ${
-            request?.requestDetails?.loading?.loadingLocation ||
-            request?.request?.loading?.loadingLocation ||
-            request?.loading?.loadingLocation ||
-            "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Loading Time:</span> ${
-            request?.requestDetails?.loading?.loadingTime ||
-            request?.request?.loading?.loadingTime ||
-            request?.loading?.loadingTime
-              ? new Date(
-                  request?.requestDetails?.loading?.loadingTime ||
-                    request?.request?.loading?.loadingTime ||
-                    request?.loading?.loadingTime,
-                ).toLocaleString()
-              : "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Staff Type:</span> ${
-            request?.requestDetails?.loading?.staffType ||
-            request?.request?.loading?.staffType ||
-            request?.loading?.staffType ||
-            "N/A"
-          }
-        </div>
-        
-        ${
-          (request?.requestDetails?.loading?.staffType ||
-            request?.request?.loading?.staffType ||
-            request?.loading?.staffType) === "SLT"
-            ? `
-          <div class="item">
-            <span class="label">Staff Service No:</span> ${
-              request?.requestDetails?.loading?.staffServiceNo ||
-              request?.request?.loading?.staffServiceNo ||
-              request?.loading?.staffServiceNo ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-              <span class="label">Name:</span> ${
-                request.loadUserData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.loadUserData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.loadUserData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.loadUserData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.loadUserData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.loadUserData?.contactNo || "N/A"
-              }
-            </div>
-        `
-            : `
-          <div class="item">
-            <span class="label">Staff Name:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffName || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Company:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffCompany || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">NIC:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffNIC || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Contact:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffContact || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Email:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffEmail || "N/A"
-            }
-          </div>
-        `
-        }
-      </div>
-    </div>
 
-    <div class="section">
-          <h2 class="section-title">Receive Officer Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.receiveOfficerData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.receiveOfficerData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.receiveOfficerData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.receiveOfficerData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.receiveOfficerData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.receiveOfficerData?.contactNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Receive Officer Comment:</span> ${
-                request.statusDetails?.recieveOfficerComment || "N/A"
-              }
+          <div class="section">
+            <h2 class="section-title">LOCATION DETAILS</h2>
+            <div class="grid">
+              <div class="item"><span class="label">From (Out):</span><span class="value">${request?.outLocation || requestCore?.outLocation || "N/A"}</span></div>
+              <div class="item"><span class="label">To (In):</span><span class="value">${request?.inLocation || requestCore?.inLocation || "N/A"}</span></div>
             </div>
           </div>
-        </div>
-        
-        <!-- Loading Details Section -->
-    <div class="section">
-      <h2 class="section-title">Unloading Details</h2>
-      <div class="grid">
-        <div class="item">
-          <span class="label">Loading Location:</span> ${
-            request?.requestDetails?.unLoading?.loadingLocation ||
-            request?.request?.unLoading?.loadingLocation ||
-            request?.unLoading?.loadingLocation ||
-            "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Loading Time:</span> ${
-            request?.requestDetails?.unLoading?.loadingTime ||
-            request?.request?.unLoading?.loadingTime ||
-            request?.unLoading?.loadingTime
-              ? new Date(
-                  request?.requestDetails?.unLoading?.loadingTime ||
-                    request?.request?.unLoading?.loadingTime ||
-                    request?.unLoading?.loadingTime,
-                ).toLocaleString()
-              : "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Staff Type:</span> ${
-            request?.requestDetails?.unLoading?.staffType ||
-            request?.request?.unLoading?.staffType ||
-            request?.unLoading?.staffType ||
-            "N/A"
-          }
-        </div>
-        
-        ${
-          (request?.requestDetails?.unLoading?.staffType ||
-            request?.request?.unLoading?.staffType ||
-            request?.unLoading?.staffType) === "SLT"
-            ? `
-          <div class="item">
-            <span class="label">Staff Service No:</span> ${
-              request?.requestDetails?.unLoading?.staffServiceNo ||
-              request?.request?.unLoading?.staffServiceNo ||
-              request?.unLoading?.staffServiceNo ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-              <span class="label">Name:</span> ${
-                request.unLoadUserData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.unLoadUserData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.unLoadUserData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.unLoadUserData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.unLoadUserData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.unLoadUserData?.contactNo || "N/A"
-              }
-            </div>
-        `
-            : `
-          <div class="item">
-            <span class="label">Staff Name:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffName ||
-              request?.request?.unLoading?.nonSLTStaffName ||
-              request?.unLoading?.nonSLTStaffName ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Company:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffCompany ||
-              request?.request?.unLoading?.nonSLTStaffCompany ||
-              request?.unLoading?.nonSLTStaffCompany ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">NIC:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffNIC ||
-              request?.request?.unLoading?.nonSLTStaffNIC ||
-              request?.unLoading?.nonSLTStaffNIC ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Contact:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffContact ||
-              request?.request?.unLoading?.nonSLTStaffContact ||
-              request?.unLoading?.nonSLTStaffContact ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Email:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffEmail || "N/A"
-            }
-          </div>
-        `
-        }
-      </div>
-    </div>
 
-        <div class="section">
-          <h2 class="section-title">items</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>item Name</th>
-                <th>Serial Number</th>
-                <th>Category</th>
-                <th>Quantity</th>
-                <th>Item Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(request.items || [])
-                .map(
-                  (item) => `
+          <div class="section">
+            <h2 class="section-title">TRANSPORT DETAILS</h2>
+            <div class="grid">
+              <div class="item"><span class="label">Method:</span><span class="value">${request?.transportData?.transportMethod || requestCore?.transport?.transportMethod || "N/A"}</span></div>
+              <div class="item"><span class="label">Transporter Type:</span><span class="value">${request?.transportData?.transporterType || requestCore?.transport?.transporterType || "N/A"}</span></div>
+              ${
+                (request?.transportData?.transporterType || requestCore?.transport?.transporterType) === "SLT"
+                  ? `
+                  <div class="item"><span class="label">Transporter:</span><span class="value">${transporterDetails?.name || "N/A"}</span></div>
+                  <div class="item"><span class="label">Service No:</span><span class="value">${transporterDetails?.serviceNo || requestCore?.transport?.transporterServiceNo || "N/A"}</span></div>
+                  <div class="item"><span class="label">Section:</span><span class="value">${transporterDetails?.section || "N/A"}</span></div>
+                  <div class="item"><span class="label">Contact:</span><span class="value">${transporterDetails?.contactNo || "N/A"}</span></div>
+                  `
+                  : `
+                  <div class="item"><span class="label">Transporter:</span><span class="value">${request?.transportData?.nonSLTTransporterName || requestCore?.transport?.nonSLTTransporterName || "N/A"}</span></div>
+                  <div class="item"><span class="label">NIC:</span><span class="value">${request?.transportData?.nonSLTTransporterNIC || requestCore?.transport?.nonSLTTransporterNIC || "N/A"}</span></div>
+                  <div class="item"><span class="label">Phone:</span><span class="value">${request?.transportData?.nonSLTTransporterPhone || requestCore?.transport?.nonSLTTransporterPhone || "N/A"}</span></div>
+                  <div class="item"><span class="label">Email:</span><span class="value">${request?.transportData?.nonSLTTransporterEmail || requestCore?.transport?.nonSLTTransporterEmail || "N/A"}</span></div>
+                  `
+              }
+              ${
+                (request?.transportData?.transportMethod || requestCore?.transport?.transportMethod) === "Vehicle"
+                  ? `
+                  <div class="item"><span class="label">Vehicle No:</span><span class="value">${requestCore?.transport?.vehicleNumber || requestCore?.vehicleNumber || "N/A"}</span></div>
+                  <div class="item"><span class="label">Vehicle Model:</span><span class="value">${requestCore?.transport?.vehicleModel || requestCore?.vehicleModel || "N/A"}</span></div>
+                  `
+                  : ""
+              }
+            </div>
+          </div>
+
+          <div class="section">
+            <h2 class="section-title">LOADING DETAILS</h2>
+            <div class="grid">
+              <div class="item"><span class="label">Location:</span><span class="value">${requestCore?.loading?.loadingLocation || request?.loading?.loadingLocation || "N/A"}</span></div>
+              <div class="item"><span class="label">Time:</span><span class="value">${requestCore?.loading?.loadingTime || request?.loading?.loadingTime ? new Date(requestCore?.loading?.loadingTime || request?.loading?.loadingTime).toLocaleString() : "N/A"}</span></div>
+              <div class="item"><span class="label">Staff Type:</span><span class="value">${requestCore?.loading?.staffType || request?.loading?.staffType || "N/A"}</span></div>
+              <div class="item"><span class="label">Staff:</span><span class="value">${request?.loadUserData?.name || requestCore?.loading?.nonSLTStaffName || "N/A"}</span></div>
+              <div class="item"><span class="label">Contact:</span><span class="value">${request?.loadUserData?.contactNo || requestCore?.loading?.nonSLTStaffContact || "N/A"}</span></div>
+            </div>
+          </div>
+
+        
+
+          <div class="section">
+            <h2 class="section-title">RECEIVE OFFICER DETAILS</h2>
+            <div class="grid">
+              <div class="item"><span class="label">Name:</span><span class="value">${request?.receiveOfficerData?.name || "N/A"}</span></div>
+              <div class="item"><span class="label">Service No:</span><span class="value">${request?.receiveOfficerData?.serviceNo || "N/A"}</span></div>
+              <div class="item"><span class="label">Section:</span><span class="value">${request?.receiveOfficerData?.section || "N/A"}</span></div>
+              <div class="item"><span class="label">Group:</span><span class="value">${request?.receiveOfficerData?.group || "N/A"}</span></div>
+              <div class="item"><span class="label">Designation:</span><span class="value">${request?.receiveOfficerData?.designation || "N/A"}</span></div>
+              <div class="item"><span class="label">Contact:</span><span class="value">${request?.receiveOfficerData?.contactNo || "N/A"}</span></div>
+              <div class="item grid-full"><span class="label">Comment:</span><span class="value">${request?.statusDetails?.recieveOfficerComment || "N/A"}</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2 class="section-title">ITEM DETAILS</h2>
+            <table>
+              <thead>
                 <tr>
-                  <td>${item?.itemDescription || "-"}</td>
-                  <td>${item?.serialNumber || "-"}</td>
-                  <td>${item?.categoryDescription || "-"}</td>
-                  <td>${item?.itemQuantity || "-"}</td>
-                  <td>${item?.itemCode || "-"}</td>
+                  <th style="width: 25%;">Description</th>
+                  <th style="width: 18%;">Serial No</th>
+                  <th style="width: 15%;">Category</th>
+                  <th style="width: 10%;">Qty</th>
+                  <th style="width: 12%;">Item Code</th>
+                  <th style="width: 12%;">Status</th>
+                  <th style="width: 15%;">Return Date</th>
                 </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="section">
-      <h2 class="section-title">Selected Returnable items</h2>
-      ${
-        request?.requestDetails?.returnableDESCRIPTIONs || []
-          ? `<table>
-            <thead>
-              <tr>
-                <th>item Name</th>
-                <th>Serial Number</th>
-                <th>Category</th>
-                <th>Return Quantity</th>
-                <th>Item Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(request?.requestDetails?.returnableDESCRIPTIONs || [])
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item?.itemDescription || "-"}</td>
-                  <td>${item?.serialNumber || "-"}</td>
-                  <td>${item?.categoryDescription || "-"}</td>
-                  <td>${item?.returnQuantity || item?.itemQuantity || "-"}</td>
-                  <td>${item?.itemCode || "-"}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>`
-          : "<p>No returnable items selected</p>"
-      }
-    </div>
-        
-        
-        <div class="footer">
-          This is an electronically generated document and does not require signature.
+              </thead>
+              <tbody>
+                ${(request?.items || [])
+                  .map(
+                    (item) => `
+                    <tr>
+                      <td>${item?.itemDescription || "-"}</td>
+                      <td>${item?.serialNumber || "-"}</td>
+                      <td>${item?.categoryDescription || "-"}</td>
+                      <td style="text-align: center;">${item?.itemQuantity || "-"}</td>
+                      <td>${item?.itemCode || "-"}</td>
+                      <td>${(item?.status || "").toLowerCase().includes("return") ? "Returnable" : "Non-Returnable"}</td>
+                      <td>${item?.returnDate ? new Date(item.returnDate).toLocaleDateString() : "-"}</td>
+                    </tr>
+                  `,
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="footer">
+            <p><strong>Important Notice:</strong> This is an electronically generated official document. No signature is required at generation, but physical signature may be required during item handover and verification.</p>
+            <p style="margin-top: 10px; font-size: 8px;">SLT Gate Pass System | Report Generated on ${new Date().toLocaleString()} | Reference: ${request?.refNo || "N/A"}</p>
+          </div>
         </div>
       </body>
       </html>
