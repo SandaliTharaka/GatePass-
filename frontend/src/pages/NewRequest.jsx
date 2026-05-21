@@ -533,12 +533,27 @@ const NewRequest = () => {
         let empData = response.data.data;
 
         // If the data itself has a nested data array, extract it
+        if (Array.isArray(empData) && empData.length > 0) {
+          empData = empData[0];
+        }
+
         if (
           empData.data &&
           Array.isArray(empData.data) &&
           empData.data.length > 0
         ) {
           empData = empData.data[0];
+        }
+
+        const matchedServiceNo = String(
+          empData.employeeNumber || empData.employeeNo || empData.serviceNo || "",
+        ).trim();
+
+        if (!matchedServiceNo || matchedServiceNo !== normalizedReceiverServiceNo) {
+          setReceiverDetails(null);
+          setReceiverFingerLocation(null);
+          showToast("Receiver details not found in ERP", "error");
+          return;
         }
 
         // Map ERP response to receiver details format
@@ -587,7 +602,7 @@ const NewRequest = () => {
           }
         } catch (fallbackError) {
           setReceiverDetails(null);
-          showToast("Receiver not found", "error");
+          showToast("Receiver details not found in ERP", "error");
         }
       }
     } catch (error) {
@@ -602,11 +617,11 @@ const NewRequest = () => {
           showToast("Receiver details loaded from database", "success");
         } else {
           setReceiverDetails(null);
-          showToast("Receiver not found", "error");
+          showToast("Receiver details not found in ERP", "error");
         }
       } catch (fallbackError) {
         setReceiverDetails(null);
-        showToast("Receiver not found", "error");
+        showToast("Receiver details not found in ERP", "error");
       }
     }
   };
@@ -1469,7 +1484,13 @@ const NewRequest = () => {
                       <input
                         type="text"
                         value={receiverServiceNo}
-                        onChange={(e) => setReceiverServiceNo(e.target.value.replace(/[^0-9]/g, ''))}
+                        inputMode="numeric"
+                        maxLength={6}
+                        onChange={(e) =>
+                          setReceiverServiceNo(
+                            e.target.value.replace(/[^0-9]/g, "").slice(0, 6),
+                          )
+                        }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
