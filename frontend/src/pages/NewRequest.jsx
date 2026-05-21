@@ -992,6 +992,8 @@ const NewRequest = () => {
         `Request created successfully! Reference: ${response.referenceNumber}`,
         "success",
       );
+      // Clear the form so user can create another request
+      resetForm();
       // Email notification is sent server-side by the backend controller
     } catch (error) {
       setIsSubmitting(false);
@@ -1052,6 +1054,62 @@ const NewRequest = () => {
       setTransporterDetails(null);
       showToast("Transporter not found", "error");
     }
+  };
+
+  // Reset the entire New Request form to initial state
+  const resetForm = () => {
+    setItems([]);
+    setCurrentItem({
+      serialNumber: "",
+      itemCode: "",
+      itemDescription: "",
+      itemCategory: "",
+      categoryDescription: "",
+      qty: 1,
+      returnable: "No",
+      returnDate: "",
+      images: [],
+    });
+    setSerialNumberInput("");
+    setShowItemForm(false);
+
+    setDestinationType("slt");
+    setInLocation("");
+    setOutLocation("");
+    setCompanyName("");
+    setCompanyAddress("");
+    setExecutiveOfficer("");
+
+    setReceiverServiceNo("");
+    setReceiverNIC("");
+    setReceiverName("");
+    setReceiverContact("");
+    setReceiverDetails(null);
+    setReceiverFingerLocation(null);
+
+    setTransportMethod("");
+    setTransporterType("");
+    setTransporterServiceNo("");
+    setTransporterDetails(null);
+    setVehicleNumber("");
+    setVehicleModel("");
+    setNonSLTTransporterName("");
+    setNonSLTTransporterNIC("");
+    setNonSLTTransporterPhone("");
+    setNonSLTTransporterEmail("");
+
+    // Clear validation errors
+    setVehicleNumberError("");
+    setCompanyNameError("");
+    setCompanyAddressError("");
+    setReceiverNICError("");
+    setReceiverNameError("");
+    setReceiverContactError("");
+    setNonSLTTransporterNameError("");
+    setNonSLTTransporterNICError("");
+    setNonSLTTransporterPhoneError("");
+    setNonSLTTransporterEmailError("");
+    setSerialNumberError("");
   };
 
   // Stats cards data
