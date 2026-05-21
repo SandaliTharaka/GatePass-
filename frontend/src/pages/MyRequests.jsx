@@ -1511,6 +1511,13 @@ const GatePassRequests = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const hasActiveFilters = searchTerm.trim() !== "" || statusFilter !== "all";
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+  };
+
   const handleOpenModal = async (request) => {
     setSelectedRequest(request);
 
@@ -1655,6 +1662,19 @@ const GatePassRequests = () => {
             </div>
           </div>
         </div>
+
+        {hasActiveFilters && (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <FaUndo className="mr-2" />
+              Clear Search
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
