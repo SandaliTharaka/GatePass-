@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link, Navigate } from "react-router-dom";
 import {
   Package,
@@ -65,6 +65,8 @@ const NewRequest = () => {
   const [inLocations, setInLocations] = useState([]);
   const [outLocations, setOutLocations] = useState([]);
   const [erpLocations, setErpLocations] = useState([]);
+  const allowOutLocationAutoFillRef = useRef(true);
+  const outLocationSelectRef = useRef(null);
   const { showToast } = useToast();
 
   // Use ERP GatePass API for categories
@@ -276,7 +278,7 @@ const NewRequest = () => {
         setInLocations(locations);
         setOutLocations(locations);
 
-        if (erpFingerLocation) {
+        if (allowOutLocationAutoFillRef.current && erpFingerLocation) {
           const match = locations.find(
             (l) =>
               l.fingerscanLocation?.trim().toLowerCase() ===
@@ -1090,10 +1092,8 @@ const NewRequest = () => {
 
     setDestinationType("slt");
     setInLocation("");
-    setOutLocation("");
     setCompanyName("");
     setCompanyAddress("");
-    setExecutiveOfficer("");
 
     setReceiverServiceNo("");
     setReceiverNIC("");
@@ -1650,6 +1650,7 @@ const NewRequest = () => {
                 </label>
                 {/* Out Location */}
                 <select
+                  ref={outLocationSelectRef}
                   value={outLocation}
                   onChange={(e) => setOutLocation(e.target.value)}
                   disabled={!!erpFingerLocation}
