@@ -143,63 +143,78 @@ const NewRequest = () => {
     setUser(userData);
   }, []);
 
+  const isReturnableItem = (item) => {
+    return (
+      item?.itemReturnable === true ||
+      item?.itemReturnable === "true" ||
+      item?.itemReturnable === "Yes" ||
+      item?.itemReturnable === "yes" ||
+      item?.isReturnable === true ||
+      item?.isReturnable === "true" ||
+      item?.isReturnable === "Yes" ||
+      item?.isReturnable === "yes" ||
+      String(item?.status || "").toLowerCase() === "returnable"
+    );
+  };
+
+  const fetchUserStats = async () => {
+    try {
+      setStatsLoading(true);
+      const token = localStorage.getItem("token");
+
+      if (!token || !user) {
+        setStatsLoading(false);
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/requests/${user.serviceNo}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.ok) {
+        const requests = await response.json();
+
+        let totalItems = 0;
+        let returnableItems = 0;
+        let nonReturnableItems = 0;
+
+        requests.forEach((request) => {
+          if (request.items && Array.isArray(request.items)) {
+            request.items.forEach((item) => {
+              const quantity = Number(item.itemQuantity || item.qty || 1) || 1;
+              totalItems += quantity;
+
+              if (isReturnableItem(item)) {
+                returnableItems += quantity;
+              } else {
+                nonReturnableItems += quantity;
+              }
+            });
+          }
+        });
+
+        setUserStats({
+          totalItems,
+          returnableItems,
+          nonReturnableItems,
+        });
+      }
+
+      setStatsLoading(false);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      setStatsLoading(false);
+    }
+  };
+
   // Fetch user stats
   useEffect(() => {
-    const fetchUserStats = async () => {
-      try {
-        setStatsLoading(true);
-        const token = localStorage.getItem("token");
-
-        if (!token || !user) {
-          setStatsLoading(false);
-          return;
-        }
-
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/requests/${user.serviceNo}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        if (response.ok) {
-          const requests = await response.json();
-
-          let totalItems = 0;
-          let returnableItems = 0;
-          let nonReturnableItems = 0;
-
-          requests.forEach((request) => {
-            if (request.items && Array.isArray(request.items)) {
-              request.items.forEach((item) => {
-                const quantity = item.itemQuantity || 1;
-                totalItems += quantity;
-
-                if (item.itemReturnable) {
-                  returnableItems += quantity;
-                } else {
-                  nonReturnableItems += quantity;
-                }
-              });
-            }
-          });
-
-          setUserStats({
-            totalItems,
-            returnableItems,
-            nonReturnableItems,
-          });
-        }
-        setStatsLoading(false);
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-        setStatsLoading(false);
-      }
-    };
-
     if (user) {
       fetchUserStats();
     }
@@ -1034,6 +1049,8 @@ const NewRequest = () => {
       );
       // Clear the form so user can create another request
       resetForm();
+      // Refresh summary in the background without blocking the form reset
+      void fetchUserStats();
       // Email notification is sent server-side by the backend controller
     } catch (error) {
       setIsSubmitting(false);
