@@ -14,6 +14,7 @@ const ItemSchema = new mongoose.Schema({
   ],
   itemQuantity: { type: Number, required: true },
   returnDate: { type: Date },
+  itemReturnable: { type: Boolean, default: false },
   //status:{ type: String },
   status: {
     type: String,

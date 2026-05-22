@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link, Navigate } from "react-router-dom";
 import {
   Package,
@@ -65,6 +65,8 @@ const NewRequest = () => {
   const [inLocations, setInLocations] = useState([]);
   const [outLocations, setOutLocations] = useState([]);
   const [erpLocations, setErpLocations] = useState([]);
+  const allowOutLocationAutoFillRef = useRef(true);
+  const outLocationSelectRef = useRef(null);
   const { showToast } = useToast();
 
   // Use ERP GatePass API for categories
@@ -141,63 +143,78 @@ const NewRequest = () => {
     setUser(userData);
   }, []);
 
+  const isReturnableItem = (item) => {
+    return (
+      item?.itemReturnable === true ||
+      item?.itemReturnable === "true" ||
+      item?.itemReturnable === "Yes" ||
+      item?.itemReturnable === "yes" ||
+      item?.isReturnable === true ||
+      item?.isReturnable === "true" ||
+      item?.isReturnable === "Yes" ||
+      item?.isReturnable === "yes" ||
+      String(item?.status || "").toLowerCase() === "returnable"
+    );
+  };
+
+  const fetchUserStats = async () => {
+    try {
+      setStatsLoading(true);
+      const token = localStorage.getItem("token");
+
+      if (!token || !user) {
+        setStatsLoading(false);
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/requests/${user.serviceNo}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.ok) {
+        const requests = await response.json();
+
+        let totalItems = 0;
+        let returnableItems = 0;
+        let nonReturnableItems = 0;
+
+        requests.forEach((request) => {
+          if (request.items && Array.isArray(request.items)) {
+            request.items.forEach((item) => {
+              const quantity = Number(item.itemQuantity || item.qty || 1) || 1;
+              totalItems += quantity;
+
+              if (isReturnableItem(item)) {
+                returnableItems += quantity;
+              } else {
+                nonReturnableItems += quantity;
+              }
+            });
+          }
+        });
+
+        setUserStats({
+          totalItems,
+          returnableItems,
+          nonReturnableItems,
+        });
+      }
+
+      setStatsLoading(false);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      setStatsLoading(false);
+    }
+  };
+
   // Fetch user stats
   useEffect(() => {
-    const fetchUserStats = async () => {
-      try {
-        setStatsLoading(true);
-        const token = localStorage.getItem("token");
-
-        if (!token || !user) {
-          setStatsLoading(false);
-          return;
-        }
-
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/requests/${user.serviceNo}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        if (response.ok) {
-          const requests = await response.json();
-
-          let totalItems = 0;
-          let returnableItems = 0;
-          let nonReturnableItems = 0;
-
-          requests.forEach((request) => {
-            if (request.items && Array.isArray(request.items)) {
-              request.items.forEach((item) => {
-                const quantity = item.itemQuantity || 1;
-                totalItems += quantity;
-
-                if (item.itemReturnable) {
-                  returnableItems += quantity;
-                } else {
-                  nonReturnableItems += quantity;
-                }
-              });
-            }
-          });
-
-          setUserStats({
-            totalItems,
-            returnableItems,
-            nonReturnableItems,
-          });
-        }
-        setStatsLoading(false);
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-        setStatsLoading(false);
-      }
-    };
-
     if (user) {
       fetchUserStats();
     }
@@ -276,7 +293,7 @@ const NewRequest = () => {
         setInLocations(locations);
         setOutLocations(locations);
 
-        if (erpFingerLocation) {
+        if (allowOutLocationAutoFillRef.current && erpFingerLocation) {
           const match = locations.find(
             (l) =>
               l.fingerscanLocation?.trim().toLowerCase() ===
@@ -533,12 +550,27 @@ const NewRequest = () => {
         let empData = response.data.data;
 
         // If the data itself has a nested data array, extract it
+        if (Array.isArray(empData) && empData.length > 0) {
+          empData = empData[0];
+        }
+
         if (
           empData.data &&
           Array.isArray(empData.data) &&
           empData.data.length > 0
         ) {
           empData = empData.data[0];
+        }
+
+        const matchedServiceNo = String(
+          empData.employeeNumber || empData.employeeNo || empData.serviceNo || "",
+        ).trim();
+
+        if (!matchedServiceNo || matchedServiceNo !== normalizedReceiverServiceNo) {
+          setReceiverDetails(null);
+          setReceiverFingerLocation(null);
+          showToast("Receiver details not found in ERP", "error");
+          return;
         }
 
         // Map ERP response to receiver details format
@@ -587,7 +619,7 @@ const NewRequest = () => {
           }
         } catch (fallbackError) {
           setReceiverDetails(null);
-          showToast("Receiver not found", "error");
+          showToast("Receiver details not found in ERP", "error");
         }
       }
     } catch (error) {
@@ -602,11 +634,11 @@ const NewRequest = () => {
           showToast("Receiver details loaded from database", "success");
         } else {
           setReceiverDetails(null);
-          showToast("Receiver not found", "error");
+          showToast("Receiver details not found in ERP", "error");
         }
       } catch (fallbackError) {
         setReceiverDetails(null);
-        showToast("Receiver not found", "error");
+        showToast("Receiver details not found in ERP", "error");
       }
     }
   };
@@ -654,6 +686,29 @@ const NewRequest = () => {
           "Please select the dispatching branch (Out Location)",
           "warning",
         );
+        return;
+      }
+
+      const normalizedReceiverServiceNo = receiverServiceNo.trim();
+      const hasSLTReceiverDetails =
+        normalizedReceiverServiceNo &&
+        receiverDetails &&
+        String(receiverDetails.serviceNo || "").trim() ===
+          normalizedReceiverServiceNo;
+      const hasNonSLTReceiverDetails =
+        receiverNIC.trim() && receiverName.trim() && receiverContact.trim();
+
+      const receiverValidationError =
+        destinationType === "slt"
+          ? hasSLTReceiverDetails
+            ? ""
+            : "Receiver details are required"
+          : hasNonSLTReceiverDetails
+            ? ""
+            : "Receiver details are required";
+
+      if (receiverValidationError) {
+        showToast(receiverValidationError, "warning");
         return;
       }
 
@@ -992,6 +1047,10 @@ const NewRequest = () => {
         `Request created successfully! Reference: ${response.referenceNumber}`,
         "success",
       );
+      // Clear the form so user can create another request
+      resetForm();
+      // Refresh summary in the background without blocking the form reset
+      void fetchUserStats();
       // Email notification is sent server-side by the backend controller
     } catch (error) {
       setIsSubmitting(false);
@@ -1052,6 +1111,60 @@ const NewRequest = () => {
       setTransporterDetails(null);
       showToast("Transporter not found", "error");
     }
+  };
+
+  // Reset the entire New Request form to initial state
+  const resetForm = () => {
+    setItems([]);
+    setCurrentItem({
+      serialNumber: "",
+      itemCode: "",
+      itemDescription: "",
+      itemCategory: "",
+      categoryDescription: "",
+      qty: 1,
+      returnable: "No",
+      returnDate: "",
+      images: [],
+    });
+    setSerialNumberInput("");
+    setShowItemForm(false);
+
+    setDestinationType("slt");
+    setInLocation("");
+    setCompanyName("");
+    setCompanyAddress("");
+
+    setReceiverServiceNo("");
+    setReceiverNIC("");
+    setReceiverName("");
+    setReceiverContact("");
+    setReceiverDetails(null);
+    setReceiverFingerLocation(null);
+
+    setTransportMethod("");
+    setTransporterType("");
+    setTransporterServiceNo("");
+    setTransporterDetails(null);
+    setVehicleNumber("");
+    setVehicleModel("");
+    setNonSLTTransporterName("");
+    setNonSLTTransporterNIC("");
+    setNonSLTTransporterPhone("");
+    setNonSLTTransporterEmail("");
+
+    // Clear validation errors
+    setVehicleNumberError("");
+    setCompanyNameError("");
+    setCompanyAddressError("");
+    setReceiverNICError("");
+    setReceiverNameError("");
+    setReceiverContactError("");
+    setNonSLTTransporterNameError("");
+    setNonSLTTransporterNICError("");
+    setNonSLTTransporterPhoneError("");
+    setNonSLTTransporterEmailError("");
+    setSerialNumberError("");
   };
 
   // Stats cards data
@@ -1411,7 +1524,13 @@ const NewRequest = () => {
                       <input
                         type="text"
                         value={receiverServiceNo}
-                        onChange={(e) => setReceiverServiceNo(e.target.value.replace(/[^0-9]/g, ''))}
+                        inputMode="numeric"
+                        maxLength={6}
+                        onChange={(e) =>
+                          setReceiverServiceNo(
+                            e.target.value.replace(/[^0-9]/g, "").slice(0, 6),
+                          )
+                        }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
@@ -1550,6 +1669,7 @@ const NewRequest = () => {
                     </div>
                   </>
                 )}
+
               </div>
             </div>
           </div>
@@ -1571,6 +1691,7 @@ const NewRequest = () => {
                 </label>
                 {/* Out Location */}
                 <select
+                  ref={outLocationSelectRef}
                   value={outLocation}
                   onChange={(e) => setOutLocation(e.target.value)}
                   disabled={!!erpFingerLocation}
