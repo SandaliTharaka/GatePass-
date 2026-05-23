@@ -81,6 +81,7 @@ const NewRequest = () => {
     returnable: "No",
     images: [],
     returnDate: "",
+    itemFound: false,
   });
 
   // For serial number lookup
@@ -353,7 +354,11 @@ const NewRequest = () => {
 
     const remainingSlots = Math.max(0, 5 - currentItem.images.length);
     if (remainingSlots <= 0) {
-      showToast("Maximum 5 photos allowed per item (minimum 2 required)", "warning");
+      const minImagesRequired = currentItem.itemFound ? 1 : 2;
+      showToast(
+        `Maximum 5 photos allowed per item (minimum ${minImagesRequired} required)`,
+        "warning",
+      );
       e.target.value = "";
       return;
     }
@@ -388,6 +393,14 @@ const NewRequest = () => {
 
       console.log("Item data received in frontend:", itemData);
 
+      const foundItem =
+        itemData &&
+        (itemData.serialNumber?.trim() ||
+          itemData.itemCode?.trim() ||
+          itemData.itemDescription?.trim() ||
+          itemData.categoryDescription?.trim() ||
+          itemData.itemCategory?.trim());
+
       // Populate form with API data
       setCurrentItem((prev) => ({
         ...prev,
@@ -400,6 +413,7 @@ const NewRequest = () => {
         returnable: prev.returnable || "No",
         images: prev.images || [],
         returnDate: prev.returnDate || "",
+        itemFound: !!foundItem,
       }));
 
       console.log("Current item after update:", {
@@ -441,9 +455,15 @@ const NewRequest = () => {
       return;
     }
 
-    // Validate images: minimum 2, maximum 5
-    if (currentItem.images.length < 2) {
-      showToast("Please upload at least 2 images for the item", "warning");
+    // Validate images: minimum depends on serial lookup
+    const minImagesRequired = currentItem.itemFound ? 1 : 2;
+    if (currentItem.images.length < minImagesRequired) {
+      showToast(
+        `Please upload at least ${minImagesRequired} image${
+          minImagesRequired > 1 ? "s" : ""
+        } for the item`,
+        "warning",
+      );
       return;
     }
 
@@ -1914,6 +1934,7 @@ const NewRequest = () => {
                           setCurrentItem({
                             ...currentItem,
                             serialNumber: serialNumber,
+                            itemFound: false,
                           });
                           // Validate in real-time while user types
                           setSerialNumberError(validateSerialNumber(serialNumber));
@@ -2092,7 +2113,7 @@ const NewRequest = () => {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Item Images (2-5 required)
+                        Item Images ({currentItem.itemFound ? "1" : "2"}-5 required)
                       </label>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {currentItem.images.map((image, idx) => (
