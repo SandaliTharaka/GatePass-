@@ -371,9 +371,8 @@ const NewRequest = () => {
 
     const remainingSlots = Math.max(0, 5 - currentItem.images.length);
     if (remainingSlots <= 0) {
-      const minImagesRequired = currentItem.itemFound ? 1 : 2;
       showToast(
-        `Maximum 5 photos allowed per item (minimum ${minImagesRequired} required)`,
+        `Maximum 5 photos allowed per item${currentItem.itemFound ? "" : " (minimum 2 required)"}`,
         "warning",
       );
       e.target.value = "";
@@ -472,13 +471,10 @@ const NewRequest = () => {
       return;
     }
 
-    // Validate images: minimum depends on serial lookup
-    const minImagesRequired = currentItem.itemFound ? 1 : 2;
-    if (currentItem.images.length < minImagesRequired) {
+    // Validate images: mandatory 2 minimum only when serial NOT found in ERP
+    if (!currentItem.itemFound && currentItem.images.length < 2) {
       showToast(
-        `Please upload at least ${minImagesRequired} image${
-          minImagesRequired > 1 ? "s" : ""
-        } for the item`,
+        `Please upload at least 2 images for this item (serial number not found in ERP)`,
         "warning",
       );
       return;
@@ -2113,7 +2109,12 @@ const NewRequest = () => {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Item Images ({currentItem.itemFound ? "1" : "2"}-5 required)
+                        Item Images{" "}
+                        {currentItem.itemFound ? (
+                          <span className="text-gray-400 font-normal">(optional, max 5)</span>
+                        ) : (
+                          <span className="text-red-500">* (min 2 required, max 5)</span>
+                        )}
                       </label>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {currentItem.images.map((image, idx) => (
@@ -2154,6 +2155,16 @@ const NewRequest = () => {
                           </label>
                         )}
                       </div>
+                      {!currentItem.itemFound && currentItem.images.length < 2 && (
+                        <p className="mt-1 text-xs text-red-500">
+                          {2 - currentItem.images.length} more image{2 - currentItem.images.length > 1 ? "s" : ""} required — serial number not found in ERP
+                        </p>
+                      )}
+                      {currentItem.itemFound && (
+                        <p className="mt-1 text-xs text-green-600">
+                          ✓ Serial found in ERP — images are optional
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex justify-end gap-4 mt-6">
