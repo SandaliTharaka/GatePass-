@@ -286,7 +286,7 @@ const loginUser = async (req, res) => {
     console.log("Login attempt:", { userId, userType });
 
     // First, try to find user in local database
-    let user = await User.findOne({ userId, userType });
+    let user = await User.findOne({ userId });
 
     if (user) {
       // User exists in local database - verify password
