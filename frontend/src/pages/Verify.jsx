@@ -4609,11 +4609,7 @@ const RequestDetailsModal = ({
                               setServiceIdError("");
                             }}
                             onKeyDown={(e) => {
-                              if (
-                                e.key === "Enter" &&
-                                !isSuperAdmin &&
-                                serviceId.trim()
-                              ) {
+                              if (e.key === "Enter" && serviceId.trim()) {
                                 e.preventDefault();
                                 handleEmployeeSearch();
                               }
@@ -4629,11 +4625,8 @@ const RequestDetailsModal = ({
 
                         <button
                           onClick={handleEmployeeSearch}
-                          disabled={isSuperAdmin}
                           className={`px-4 py-3 rounded-r-lg ${
-                            isSuperAdmin
-                              ? "bg-gray-300 cursor-not-allowed"
-                              : "bg-blue-500 hover:bg-blue-600 text-white"
+                            "bg-blue-500 hover:bg-blue-600 text-white"
                           }`}
                         >
                           <FaSearch />
@@ -4711,7 +4704,6 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
-                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.name}
                           onChange={(e) =>
                             handleNonSltFieldChange("name", e.target.value)
@@ -4735,7 +4727,6 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
-                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.companyName}
                           onChange={(e) =>
                             handleNonSltFieldChange(
@@ -4762,7 +4753,6 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
-                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.nic}
                           onChange={(e) =>
                             handleNonSltFieldChange("nic", e.target.value)
@@ -4786,7 +4776,6 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
-                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.contactNo}
                           onChange={(e) =>
                             handleNonSltFieldChange("contactNo", e.target.value)
@@ -4810,7 +4799,6 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="email"
-                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.email}
                           onChange={(e) =>
                             handleNonSltFieldChange("email", e.target.value)
