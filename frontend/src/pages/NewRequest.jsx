@@ -504,13 +504,14 @@ const NewRequest = () => {
       returnable: "No",
       returnDate: "",
       images: [],
+      itemFound: false,
     });
     setSerialNumberInput("");
+    setSerialNumberError(""); // clear stale error so it can't block future submit
     setShowItemForm(false);
   };
 
   const handleCancelEdit = () => {
-    // Reset the currentItem
     setCurrentItem({
       serialNumber: "",
       itemCode: "",
@@ -521,8 +522,10 @@ const NewRequest = () => {
       returnable: "No",
       returnDate: "",
       images: [],
+      itemFound: false,
     });
     setSerialNumberInput("");
+    setSerialNumberError("");
     setShowItemForm(false);
   };
   const removeItem = (id) => {
