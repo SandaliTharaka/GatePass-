@@ -24,16 +24,26 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     // Initialize socket connection
-    const SOCKET_URL =
-      import.meta.env.VITE_API_URL?.replace("/api", "") ||
-      "http://localhost:5000";
+    const apiUrl = import.meta.env.VITE_API_URL;
+    let SOCKET_URL = "http://localhost:5000";
+    if (apiUrl) {
+      SOCKET_URL = apiUrl.replace("/api", "");
+      // If running on https, ensure socket uses wss
+      if (typeof window !== "undefined") {
+        const pageSecure = window.location.protocol === "https:";
+        SOCKET_URL = SOCKET_URL.replace(/^http:/, pageSecure ? "https:" : "http:");
+      }
+    }
 
     const newSocket = io(SOCKET_URL, {
-      transports: ["websocket", "polling"],
+      // Use polling first for the initial handshake, then upgrade to websocket
+      transports: ["polling", "websocket"],
+      path: "/socket.io",
+      withCredentials: true,
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      timeout: 10000,
+      timeout: 20000,
     });
 
     socketRef.current = newSocket;
@@ -69,6 +79,11 @@ export const SocketProvider = ({ children }) => {
     newSocket.on("connect_error", (error) => {
       console.error("Socket.IO connection error:", error);
       setIsConnected(false);
+    });
+
+    // Extra debug for early websocket close issues
+    newSocket.io.on("packet_error", (err) => {
+      console.warn("Socket.IO packet_error:", err);
     });
 
     newSocket.on("reconnect", (attemptNumber) => {
