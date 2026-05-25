@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   getPendingStatuses,
   getApprovedStatuses,
@@ -18,7 +18,7 @@ import {
   searchReceiverByServiceNo,
 } from "../services/RequestService.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { useLocation } from "react-router-dom";
@@ -65,6 +65,7 @@ import {
   FaUndo,
 } from "react-icons/fa";
 
+// PDF helpers (restored to local implementation)
 // Helper function to detect Non-SLT identifiers
 const isNonSltIdentifier = (serviceNo) => {
   if (!serviceNo) return false;
@@ -90,6 +91,57 @@ const ensureReceiverDetails = (receiverDetails, receiverServiceNo, request) => {
       "N/A",
   };
 };
+
+const buildTransportPdfRows = (transport = {}, transporterDetails = null) => {
+  const rows = [
+    ["Method", transport.transportMethod || "N/A"],
+    ["Type", transport.transporterType || "N/A"],
+  ];
+
+  const hasEmployeeDetails =
+    transporterDetails &&
+    (transporterDetails.name ||
+      transporterDetails.serviceNo ||
+      transporterDetails.designation ||
+      transporterDetails.section ||
+      transporterDetails.group ||
+      transporterDetails.contactNo);
+
+  if (String(transport.transporterType || "").toUpperCase() === "SLT") {
+    rows.push(["Transporter", transporterDetails?.name || transport.transporterName || "N/A"]);
+    rows.push(["Service No", transporterDetails?.serviceNo || transport.transporterServiceNo || "N/A"]);
+    rows.push(["Designation", transporterDetails?.designation || transport.transporterDesignation || "N/A"]);
+    rows.push(["Section", transporterDetails?.section || transport.transporterSection || "N/A"]);
+    rows.push(["Group", transporterDetails?.group || transport.transporterGroup || "N/A"]);
+    rows.push(["Contact", transporterDetails?.contactNo || transport.transporterContact || "N/A"]);
+  } else if (
+    String(transport.transporterType || "").toUpperCase() === "NON-SLT" ||
+    transport.nonSLTTransporterName ||
+    transport.nonSLTTransporterNIC ||
+    transport.nonSLTTransporterPhone ||
+    transport.nonSLTTransporterEmail
+  ) {
+    rows.push(["Transporter", transport.nonSLTTransporterName || "N/A"]);
+    rows.push(["NIC", transport.nonSLTTransporterNIC || "N/A"]);
+    rows.push(["Phone", transport.nonSLTTransporterPhone || "N/A"]);
+    rows.push(["Email", transport.nonSLTTransporterEmail || "N/A"]);
+  } else if (hasEmployeeDetails) {
+    rows.push(["Transporter", transporterDetails?.name || "N/A"]);
+    rows.push(["Service No", transporterDetails?.serviceNo || "N/A"]);
+    rows.push(["Designation", transporterDetails?.designation || "N/A"]);
+    rows.push(["Section", transporterDetails?.section || "N/A"]);
+    rows.push(["Group", transporterDetails?.group || "N/A"]);
+    rows.push(["Contact", transporterDetails?.contactNo || "N/A"]);
+  }
+
+  if (String(transport.transportMethod || "").toLowerCase() === "vehicle") {
+    rows.push(["Vehicle No", transport.vehicleNumber || "N/A"]);
+    rows.push(["Vehicle Model", transport.vehicleModel || "N/A"]);
+  }
+
+  return rows;
+};
+
 
 const mapErpEmployeeToReceiver = (employee, fallbackServiceNo) => {
   if (!employee) return null;
@@ -141,29 +193,13 @@ const fetchOfficerData = async (status) => {
   let executiveOfficerData = null;
   let verifyOfficerData = null;
 
-  if (execServiceNo) {
-    try {
-      executiveOfficerData = await getCachedUser(
-        execServiceNo,
-        searchUserByServiceNo,
-      );
-    } catch {}
-  }
-
-  if (verifyServiceNo) {
-    try {
-      verifyOfficerData = await getCachedUser(
-        verifyServiceNo,
-        searchUserByServiceNo,
-      );
-    } catch {}
-  }
-
   return { executiveOfficerData, verifyOfficerData };
 };
 
-// PDF Generator function for Petrol Leader (moved to module level for accessibility)
-const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
+// PDF Generator function for Petrol Leader (restored local implementation)
+// Accepts options: { openInNewWindow: boolean, autoPrint: boolean }
+const generateDESCRIPTIONDetailsPDF = (fullRequest, options = {}) => {
+  const { openInNewWindow = false, autoPrint = false } = options;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -183,9 +219,7 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   const addHeader = () => {
     try {
       doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
-    } catch (e) {
-      // ignore logo rendering issues
-    }
+    } catch (e) {}
 
     doc.setDrawColor(...palette.navy);
     doc.setLineWidth(1.1);
@@ -193,21 +227,15 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
 
     doc.setFontSize(17);
     doc.setTextColor(...palette.navy);
-    doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
-      align: "center",
-    });
+    doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, { align: "center" });
 
     doc.setFontSize(9);
     doc.setTextColor(...palette.slate);
-    doc.text("Official Item Movement Record", pageWidth / 2, 46, {
-      align: "center",
-    });
+    doc.text("Official Item Movement Record", pageWidth / 2, 46, { align: "center" });
 
     doc.setFontSize(9);
     doc.setTextColor(...palette.slate);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
-      align: "right",
-    });
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, { align: "right" });
 
     doc.setFontSize(10);
     doc.setTextColor(...palette.text);
@@ -281,9 +309,10 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   };
 
   const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
+  const transport = requestCore.transport || fullRequest.transportData || fullRequest.transport || {};
+  const transporterDetails = fullRequest.transporterDetails && typeof fullRequest.transporterDetails === "object" ? fullRequest.transporterDetails : null;
   const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
-  const senderInfo =
-    fullRequest.senderDetails || fullRequest.sender || requestCore.senderDetails || {};
+  const senderInfo = fullRequest.senderDetails || fullRequest.sender || requestCore.senderDetails || {};
 
   drawKeyValueBox("Sender Details", [
     ["Name", senderInfo.name || senderInfo.displayName || "-"],
@@ -450,74 +479,7 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
     ]);
   }
 
-  const t =
-    fullRequest.transport ||
-    fullRequest.transportData ||
-    requestCore.transport ||
-    requestCore.transportData ||
-    {};
-
-  const transportRows = [
-    ["Transport Method", t.transportMethod || "-"],
-    ["Transporter Type", t.transporterType || "-"],
-  ];
-
-  if (String(t.transporterType || "").toUpperCase() === "SLT") {
-    transportRows.push([
-      "Service No",
-      t.transporterServiceNo || requestCore.transporterServiceNo || "-",
-    ]);
-    transportRows.push([
-      "Name",
-      t.transporterName || requestCore.transporterName || "-",
-    ]);
-    transportRows.push([
-      "Section",
-      t.transporterSection || requestCore.transporterSection || "-",
-    ]);
-    transportRows.push([
-      "Group",
-      t.transporterGroup || requestCore.transporterGroup || "-",
-    ]);
-    transportRows.push([
-      "Designation",
-      t.transporterDesignation || requestCore.transporterDesignation || "-",
-    ]);
-    transportRows.push([
-      "Contact",
-      t.transporterContact || requestCore.transporterContact || "-",
-    ]);
-  } else {
-    transportRows.push([
-      "Name",
-      t.nonSLTTransporterName || requestCore.nonSLTTransporterName || "-",
-    ]);
-    transportRows.push([
-      "NIC",
-      t.nonSLTTransporterNIC || requestCore.nonSLTTransporterNIC || "-",
-    ]);
-    transportRows.push([
-      "Contact",
-      t.nonSLTTransporterPhone || requestCore.nonSLTTransporterPhone || "-",
-    ]);
-    transportRows.push([
-      "Email",
-      t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-",
-    ]);
-  }
-
-  if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
-    transportRows.push([
-      "Vehicle No",
-      t.vehicleNumber || requestCore.vehicleNumber || "-",
-    ]);
-    transportRows.push([
-      "Vehicle Model",
-      t.vehicleModel || requestCore.vehicleModel || "-",
-    ]);
-  }
-
-  drawKeyValueBox("Transport Details", transportRows);
+  drawKeyValueBox("Transport Details", buildTransportPdfRows(transport, transporterDetails));
 
   const pageCount = doc.getNumberOfPages();
   for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
@@ -532,8 +494,25 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   }
 
   const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
-  doc.save(`SLT_GatePass_${safeRef}.pdf`);
+  if (openInNewWindow && typeof window !== "undefined") {
+    try {
+      const blob = doc.output("blob");
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url);
+      if (w && autoPrint) {
+        w.addEventListener("load", () => {
+          try { w.print(); } catch (e) {}
+        });
+      }
+    } catch (e) {
+      console.error("Failed to open PDF in new window:", e);
+      doc.save(`SLT_GatePass_${safeRef}.pdf`);
+    }
+  } else {
+    doc.save(`SLT_GatePass_${safeRef}.pdf`);
+  }
 };
+
 const Verify = () => {
   const [activeTab, setActiveTab] = useState("pending");
   const [showModal, setShowModal] = useState(false);
@@ -553,7 +532,7 @@ const Verify = () => {
   const isSuperAdmin = role === "SUPERADMIN";
 
   // Add states for loading/unloading details
-  const [staffType, setStaffType] = useState("");
+  const [staffType, setStaffType] = useState("SLT");
   const [serviceId, setServiceId] = useState("");
   const [searchedEmployee, setSearchedEmployee] = useState(null);
 
@@ -1356,13 +1335,7 @@ const Verify = () => {
         </div>
       </div>
     `;
-
-      const emailResult = await emailSent({
-        to: petrolLeaderEmail,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       return emailResult;
     } catch (error) {
       console.error("Failed to send approval email to petrol leader:", error);
@@ -1478,13 +1451,7 @@ const Verify = () => {
         </div>
       </div>
     `;
-
-      const emailResult = await emailSent({
-        to: request.receiverDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
+      // Email notification is sent server-side by the backend controller
       return emailResult;
     } catch (error) {
       console.error("Failed to send approval email to receiver:", error);
@@ -1614,14 +1581,9 @@ const Verify = () => {
         </div>
       </div>
     `;
-
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Return notification email sent to requester", "success");
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual return notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send return email:", error);
       showToast("Failed to send return email", "error");
@@ -1778,20 +1740,10 @@ const Verify = () => {
       </div>
     `;
 
-      // Send the email
-      const result = await emailSent({
-        to: approver.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      console.log("Executive officer notification email sent successfully");
-      showToast(
-        "Return notification email sent to executive officer",
-        "success",
-      );
-
-      return result;
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual executive notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
+      return true;
     } catch (error) {
       console.error("Failed to send return email to executive officer:", error);
       showToast("Failed to send email to executive officer", "error");
@@ -1905,6 +1857,11 @@ const Verify = () => {
   // UPDATED: handleApprove function to use consolidated email function
   const handleApprove = async (item) => {
     try {
+      if (!["SLT", "Non-SLT"].includes(staffType)) {
+        showToast("Please select SLT or Non-SLT loading staff", "warning");
+        return;
+      }
+
       // Prepare loading details based on staff type
       let loadingDetails = {
         loadingLocation: item.outLocation,
@@ -2071,14 +2028,9 @@ const Verify = () => {
           </div>
         `;
 
-      // Send the email
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Rejection notification email sent to requester", "success");
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual rejection notification disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");
@@ -2159,14 +2111,9 @@ const Verify = () => {
           </div>
         `;
 
-      // Send the email
-      await emailSent({
-        to: approver.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Rejection notification email sent to requester", "success");
+      // Manual email disabled — server sends notifications instead
+      console.info("Manual rejection notification to approver disabled; server will send notifications.");
+      showToast("Notifications are sent automatically by the system.", "info");
     } catch (error) {
       console.error("Failed to send rejection email:", error);
       showToast("Failed to send rejection email", "error");
@@ -2316,7 +2263,7 @@ const Verify = () => {
   const filteredRejectedDESCRIPTIONs = applyFilters(rejectedDESCRIPTIONs);
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-indigo-50 to-blue-50 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 p-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -2335,7 +2282,7 @@ const Verify = () => {
           onClick={() => setActiveTab("pending")}
           className={`rounded-2xl shadow-lg overflow-hidden transition-all cursor-pointer ${
             activeTab === "pending"
-              ? "bg-linear-to-br from-amber-500 to-orange-500 transform scale-105"
+              ? "bg-gradient-to-br from-amber-500 to-orange-500 transform scale-105"
               : "bg-white hover:shadow-xl"
           }`}
         >
@@ -2382,7 +2329,7 @@ const Verify = () => {
           onClick={() => setActiveTab("approved")}
           className={`rounded-2xl shadow-lg overflow-hidden transition-all cursor-pointer ${
             activeTab === "approved"
-              ? "bg-linear-to-br from-emerald-500 to-green-500 transform scale-105"
+              ? "bg-gradient-to-br from-emerald-500 to-green-500 transform scale-105"
               : "bg-white hover:shadow-xl"
           }`}
         >
@@ -2429,7 +2376,7 @@ const Verify = () => {
           onClick={() => setActiveTab("rejected")}
           className={`rounded-2xl shadow-lg overflow-hidden transition-all cursor-pointer ${
             activeTab === "rejected"
-              ? "bg-linear-to-br from-rose-500 to-red-500 transform scale-105"
+              ? "bg-gradient-to-br from-rose-500 to-red-500 transform scale-105"
               : "bg-white hover:shadow-xl"
           }`}
         >
@@ -2824,6 +2771,33 @@ const RequestDetailsModal = ({
       : ["details", "navigation"];
   const VerifyStatus = true;
 
+  const isNonSltDetailsValid = () => {
+    const requiredFields = [
+      "name",
+      "companyName",
+      "nic",
+      "contactNo",
+      "email",
+    ];
+
+    return requiredFields.every((field) => {
+      const value = nonSltStaffDetails[field]?.toString().trim();
+      return value && !validateField(field, value);
+    });
+  };
+
+  const isReadyForNextTab = () => {
+    if (staffType === "SLT") {
+      return Boolean(searchedEmployee);
+    }
+
+    if (staffType === "Non-SLT") {
+      return isNonSltDetailsValid();
+    }
+
+    return false;
+  };
+
   if (!isOpen || !request) return null;
 
   const handleBulkReturn = async () => {
@@ -3094,812 +3068,16 @@ const RequestDetailsModal = ({
   };
 
   const printReport = (request, transporterDetails, loadingStaff) => {
-    // Create a temporary iframe to hold the printable content
-    const printFrame = document.createElement("iframe");
-    printFrame.style.position = "absolute";
-    printFrame.style.top = "-9999px";
-    document.body.appendChild(printFrame);
-
-    const contentDocument = printFrame.contentDocument;
-
-    // Create the print content with styling
-    contentDocument.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>SLT Gate Pass - ${request.refNo}</title>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: 'Segoe UI', Arial, sans-serif;
-              line-height: 1.6;
-              color: #2c3e50;
-              background: #fff;
-            }
-            .container {
-              max-width: 8.5in;
-              margin: 0 auto;
-              padding: 0.5in;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              padding-bottom: 20px;
-              border-bottom: 3px solid #003399;
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-            }
-            .header-left {
-              flex: 1;
-            }
-            .header-center {
-              flex: 2;
-              text-align: center;
-            }
-            .header-right {
-              flex: 1;
-              text-align: right;
-              font-size: 11px;
-            }
-            .logo {
-              max-height: 70px;
-              margin-bottom: 5px;
-            }
-            .title {
-              font-size: 26px;
-              font-weight: bold;
-              color: #003399;
-              margin: 5px 0;
-              letter-spacing: 0.5px;
-            }
-            .subtitle {
-              font-size: 12px;
-              color: #666;
-              font-style: italic;
-            }
-            .ref-info {
-              background: #f0f4f8;
-              padding: 8px;
-              margin-top: 5px;
-              border-radius: 4px;
-              font-weight: 600;
-            }
-            .ref {
-              font-size: 12px;
-              color: #003399;
-              margin: 3px 0;
-            }
-            .date {
-              font-size: 11px;
-              color: #999;
-              margin: 3px 0;
-            }
-            .meta-info {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 20px;
-              font-size: 10px;
-              color: #666;
-              border-top: 1px solid #ddd;
-              padding-top: 10px;
-            }
-            .section {
-              page-break-inside: avoid;
-              margin-bottom: 22px;
-              background: #fafbfc;
-              padding: 14px;
-              border-radius: 2px;
-            }
-            .section-title {
-              font-size: 14px;
-              font-weight: bold;
-              color: #003399;
-              margin-bottom: 12px;
-              padding-bottom: 8px;
-              border-bottom: 2px solid #003399;
-              display: flex;
-              align-items: center;
-            }
-            .section-title::before {
-              content: '';
-              width: 4px;
-              height: 4px;
-              background: #003399;
-              border-radius: 50%;
-              margin-right: 10px;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 15px;
-            }
-            .grid-full {
-              grid-column: 1 / -1;
-            }
-            .item {
-              margin-bottom: 8px;
-              font-size: 11px;
-            }
-            .label {
-              font-weight: 700;
-              color: #003399;
-              display: inline-block;
-              min-width: 120px;
-            }
-            .value {
-              color: #2c3e50;
-              word-break: break-word;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 15px 0;
-              background: white;
-              border: 1px solid #ddd;
-            }
-            thead {
-              background: linear-gradient(135deg, #003399 0%, #0047b3 100%);
-              color: white;
-            }
-            th {
-              padding: 10px;
-              text-align: left;
-              font-size: 11px;
-              font-weight: 700;
-              border: 1px solid #ddd;
-            }
-            td {
-              padding: 8px 10px;
-              font-size: 10px;
-              border: 1px solid #e5e5e5;
-              color: #444;
-            }
-            tbody tr:nth-child(odd) {
-              background: #f9f9f9;
-            }
-            tbody tr:nth-child(even) {
-              background: #ffffff;
-            }
-            tbody tr:hover {
-              background: #f0f4f8;
-            }
-            .signature-section {
-              display: grid;
-              grid-template-columns: 1fr 1fr 1fr;
-              gap: 20px;
-              margin-top: 40px;
-              page-break-inside: avoid;
-            }
-            .signature-box {
-              text-align: center;
-            }
-            .sig-line {
-              border-top: 1px solid #333;
-              margin: 40px 0 5px;
-              min-height: 1px;
-            }
-            .sig-label {
-              font-size: 10px;
-              font-weight: 600;
-              color: #333;
-            }
-            .sig-date {
-              font-size: 9px;
-              color: #666;
-              margin-top: 3px;
-            }
-            .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 2px solid #ddd;
-              text-align: center;
-              font-size: 9px;
-              color: #999;
-            }
-            .page-break {
-              page-break-after: always;
-            }
-            @media print {
-              body {
-                margin: 0;
-                padding: 0;
-              }
-              .container {
-                padding: 0;
-              }
-              .section {
-                page-break-inside: avoid;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <div class="header-left">
-                <img src=${logoUrl} alt="SLT Logo" class="logo" />
-              </div>
-              <div class="header-center">
-                <div class="title">SLT GATE PASS</div>
-                <div class="subtitle">Official Item Movement Record</div>
-                <div class="ref-info">
-                  <div class="ref">Ref: ${request.refNo}</div>
-                  <div class="date">Generated: ${new Date().toLocaleString()}</div>
-                </div>
-              </div>
-              <div class="header-right">
-                <div class="date">Document Type:<br/><strong>Print Report</strong></div>
-              </div>
-            </div>
-
-            <div class="section">
-              <h2 class="section-title">REQUEST SUMMARY</h2>
-              <div class="grid">
-                <div class="item">
-                  <span class="label">Reference:</span>
-                  <span class="value">${request.refNo || "N/A"}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Date:</span>
-                  <span class="value">${new Date(request.createdAt).toLocaleDateString()}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Total Items:</span>
-                  <span class="value">${request.items?.length || 0}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="section">
-              <h2 class="section-title">SENDER DETAILS</h2>
-              <div class="grid">
-                <div class="item">
-                  <span class="label">Name:</span>
-                  <span class="value">${request?.senderDetails?.name || "N/A"}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Service No:</span>
-                  <span class="value">${
-                    request?.senderDetails?.serviceNo ||
-                    request?.requestDetails?.employeeServiceNo ||
-                    request?.request?.employeeServiceNo ||
-                    "N/A"
-                  }</span>
-                </div>
-                <div class="item">
-                  <span class="label">Designation:</span>
-                  <span class="value">${request?.senderDetails?.designation || "N/A"}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Section:</span>
-                  <span class="value">${request?.senderDetails?.section || "N/A"}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Group:</span>
-                  <span class="value">${request?.senderDetails?.group || "N/A"}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Contact:</span>
-                  <span class="value">${request?.senderDetails?.contactNo || "N/A"}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="section">
-              <h2 class="section-title">RECEIVER DETAILS</h2>
-              <div class="grid">
-                ${
-                  request?.isNonSltPlace ||
-                  request?.requestDetails?.isNonSltPlace ||
-                  request?.request?.isNonSltPlace
-                    ? `
-                    <div class="item">
-                      <span class="label">Name:</span>
-                      <span class="value">${
-                        request?.receiverName ||
-                        request?.requestDetails?.receiverName ||
-                        request?.request?.receiverName ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">NIC:</span>
-                      <span class="value">${
-                        request?.receiverNIC ||
-                        request?.requestDetails?.receiverNIC ||
-                        request?.request?.receiverNIC ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Company:</span>
-                      <span class="value">${
-                        request?.companyName ||
-                        request?.requestDetails?.companyName ||
-                        request?.request?.companyName ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Contact:</span>
-                      <span class="value">${
-                        request?.receiverContact ||
-                        request?.requestDetails?.receiverContact ||
-                        request?.request?.receiverContact ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item grid-full">
-                      <span class="label">Address:</span>
-                      <span class="value">${
-                        request?.companyAddress ||
-                        request?.requestDetails?.companyAddress ||
-                        request?.request?.companyAddress ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    `
-                    : `
-                    <div class="item">
-                      <span class="label">Name:</span>
-                      <span class="value">${request?.receiverDetails?.name || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Service No:</span>
-                      <span class="value">${request?.receiverDetails?.serviceNo || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Designation:</span>
-                      <span class="value">${request?.receiverDetails?.designation || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Section:</span>
-                      <span class="value">${request?.receiverDetails?.section || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Group:</span>
-                      <span class="value">${request?.receiverDetails?.group || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Contact:</span>
-                      <span class="value">${request?.receiverDetails?.contactNo || "N/A"}</span>
-                    </div>
-                    `
-                }
-              </div>
-            </div>
-
-            <div class="section">
-              <h2 class="section-title">LOCATION DETAILS</h2>
-              <div class="grid">
-                <div class="item">
-                  <span class="label">From (Out):</span>
-                  <span class="value">${
-                    request?.outLocation ||
-                    request?.requestDetails?.outLocation ||
-                    request?.request?.outLocation ||
-                    "N/A"
-                  }</span>
-                </div>
-                <div class="item">
-                  <span class="label">To (In):</span>
-                  <span class="value">${
-                    request?.inLocation ||
-                    request?.requestDetails?.inLocation ||
-                    request?.request?.inLocation ||
-                    "N/A"
-                  }</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="section">
-              <h2 class="section-title">TRANSPORT DETAILS</h2>
-              <div class="grid">
-                <div class="item">
-                  <span class="label">Method:</span>
-                  <span class="value">${request?.transportData?.transportMethod || "N/A"}</span>
-                </div>
-                <div class="item">
-                  <span class="label">Transporter Type:</span>
-                  <span class="value">${request?.transportData?.transporterType || "N/A"}</span>
-                </div>
-                ${
-                  request?.transportData?.transporterType === "SLT"
-                    ? `
-                    <div class="item">
-                      <span class="label">Transporter:</span>
-                      <span class="value">${transporterDetails?.name || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Service No:</span>
-                      <span class="value">${transporterDetails?.serviceNo || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Section:</span>
-                      <span class="value">${transporterDetails?.section || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Contact:</span>
-                      <span class="value">${transporterDetails?.contactNo || "N/A"}</span>
-                    </div>
-                    `
-                    : `
-                    <div class="item">
-                      <span class="label">Transporter:</span>
-                      <span class="value">${request?.transportData?.nonSLTTransporterName || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">NIC:</span>
-                      <span class="value">${request?.transportData?.nonSLTTransporterNIC || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Phone:</span>
-                      <span class="value">${request?.transportData?.nonSLTTransporterPhone || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Email:</span>
-                      <span class="value">${request?.transportData?.nonSLTTransporterEmail || "N/A"}</span>
-                    </div>
-                    `
-                }
-                ${
-                  request?.transportData?.transportMethod === "Vehicle"
-                    ? `
-                    <div class="item">
-                      <span class="label">Vehicle No:</span>
-                      <span class="value">${request?.requestDetails?.vehicleNumber || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Vehicle Model:</span>
-                      <span class="value">${request?.requestDetails?.vehicleModel || "N/A"}</span>
-                    </div>
-                    `
-                    : ""
-                }
-              </div>
-            </div>
-
-            ${
-              (request?.requestDetails?.unLoading?.loadingLocation || 
-               request?.unLoading?.loadingLocation ||
-               request?.requestDetails?.unLoading?.loadingTime || 
-               request?.unLoading?.loadingTime ||
-               request?.requestDetails?.unLoading?.staffType || 
-               request?.unLoading?.staffType) ? `
-            <div class="section">
-              <h2 class="section-title">UNLOADING DETAILS</h2>
-              <div class="grid">
-                <div class="item">
-                  <span class="label">Location:</span>
-                  <span class="value">${
-                    request?.requestDetails?.unLoading?.loadingLocation ||
-                    request?.unLoading?.loadingLocation ||
-                    "N/A"
-                  }</span>
-                </div>
-                <div class="item">
-                  <span class="label">Time:</span>
-                  <span class="value">${
-                    request?.requestDetails?.unLoading?.loadingTime ||
-                    request?.unLoading?.loadingTime
-                      ? new Date(
-                          request?.requestDetails?.unLoading?.loadingTime ||
-                          request?.unLoading?.loadingTime,
-                        ).toLocaleString()
-                      : "N/A"
-                  }</span>
-                </div>
-                <div class="item">
-                  <span class="label">Staff Type:</span>
-                  <span class="value">${
-                    request?.requestDetails?.unLoading?.staffType ||
-                    request?.unLoading?.staffType ||
-                    "N/A"
-                  }</span>
-                </div>
-                ${
-                  (request?.requestDetails?.unLoading?.staffType || request?.unLoading?.staffType) === "SLT"
-                    ? `
-                    <div class="item">
-                      <span class="label">Staff Name:</span>
-                      <span class="value">${request.unloadUserData?.name || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Service No:</span>
-                      <span class="value">${request.unloadUserData?.serviceNo || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Section:</span>
-                      <span class="value">${request.unloadUserData?.section || "N/A"}</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Contact:</span>
-                      <span class="value">${request.unloadUserData?.contactNo || "N/A"}</span>
-                    </div>
-                    `
-                    : `
-                    <div class="item">
-                      <span class="label">Staff Name:</span>
-                      <span class="value">${
-                        request?.requestDetails?.unLoading?.nonSLTStaffName ||
-                        request?.unLoading?.nonSLTStaffName ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Company:</span>
-                      <span class="value">${
-                        request?.requestDetails?.unLoading?.nonSLTStaffCompany ||
-                        request?.unLoading?.nonSLTStaffCompany ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">NIC:</span>
-                      <span class="value">${
-                        request?.requestDetails?.unLoading?.nonSLTStaffNIC ||
-                        request?.unLoading?.nonSLTStaffNIC ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    <div class="item">
-                      <span class="label">Contact:</span>
-                      <span class="value">${
-                        request?.requestDetails?.unLoading?.nonSLTStaffContact ||
-                        request?.unLoading?.nonSLTStaffContact ||
-                        "N/A"
-                      }</span>
-                    </div>
-                    `
-                }
-              </div>
-            </div>
-            ` : ''
-            }
-
-            <div class="section">
-              <h2 class="section-title">ITEM DETAILS</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width: 25%;">Description</th>
-                    <th style="width: 18%;">Serial No</th>
-                    <th style="width: 15%;">Category</th>
-                    <th style="width: 10%;">Qty</th>
-                    <th style="width: 12%;">Item Code</th>
-                    <th style="width: 12%;">Status</th>
-                    <th style="width: 15%;">Return Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${request.items
-                    .map(
-                      (item) => `
-                    <tr>
-                      <td>${item?.itemDescription || "-"}</td>
-                      <td>${item?.serialNumber || "-"}</td>
-                      <td>${item?.categoryDescription || "-"}</td>
-                      <td style="text-align: center;">${item?.itemQuantity || "-"}</td>
-                      <td>${item?.itemCode || "-"}</td>
-                      <td>${item?.status === "Returnable" ? "Returnable" : "Non-Returnable"}</td>
-                      <td>${item?.status === "Returnable" && item?.returnDate ? new Date(item.returnDate).toLocaleDateString() : "-"}</td>
-                    </tr>
-                  `,
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="footer">
-              <p><strong>Important Notice:</strong> This is an electronically generated official document. No signature is required at generation, but physical signature may be required during item transfer.</p>
-              <p style="margin-top: 10px; font-size: 8px;">SLT Gate Pass System | Report Generated on ${new Date().toLocaleString()} | Reference: ${request.refNo}</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `);
-
-    contentDocument.close();
-
-    // Wait for content to load then print
-    printFrame.onload = function () {
-      printFrame.contentWindow.focus();
-      printFrame.contentWindow.print();
-
-      // Remove the iframe after printing
-      setTimeout(() => {
-        document.body.removeChild(printFrame);
-      }, 1000);
-    };
-  };
-
-  const generateDESCRIPTIONDetailsPDF = (items, refNo) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-
-    // Add SLT logo
-    try {
-      doc.addImage(logoUrl, "PNG", margin, 10, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
+    // Ensure transporter / loading info is present on the object passed to the PDF generator
+    const fullRequest = { ...(request || {}) };
+    if (transporterDetails) fullRequest.transporterDetails = transporterDetails;
+    if (!fullRequest.transportData && fullRequest.requestDetails?.transport) {
+      fullRequest.transportData = fullRequest.requestDetails.transport;
     }
+    if (loadingStaff) fullRequest.loadUserData = fullRequest.loadUserData || loadingStaff;
 
-    // Header
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 153); // SLT blue color
-    doc.text("SLT Gate Pass - item Details", pageWidth / 2, 20, {
-      align: "center",
-    });
-
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Reference: ${request.refNo}`, pageWidth / 2, 30, {
-      align: "center",
-    });
-
-    // Add current date
-    const currentDate = new Date().toLocaleDateString();
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${currentDate}`, pageWidth - margin, 20, {
-      align: "right",
-    });
-
-    // Horizontal line
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, 35, pageWidth - margin, 35);
-
-    // items Table
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text("item Details", margin, 45);
-
-    // Table header
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.setDrawColor(200, 200, 200);
-
-    // Define column widths
-    const col1Width = 60; // item Name
-    const col2Width = 40; // Serial Number
-    const col3Width = 30; // Category
-    const col4Width = 20; // Quantity
-    const col5Width = 30; // Status
-
-    // Draw table header
-    doc.setFillColor(240, 240, 240);
-    doc.rect(
-      margin,
-      yPos,
-      col1Width + col2Width + col3Width + col4Width + col5Width,
-      8,
-      "F",
-    );
-
-    doc.text("item Name", margin + 3, yPos + 5.5);
-    doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-    doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-    doc.text("Qty", margin + col1Width + col2Width + col3Width + 3, yPos + 5.5);
-    doc.text(
-      "Item Code",
-      margin + col1Width + col2Width + col3Width + col4Width + 3,
-      yPos + 5.5,
-    );
-
-    yPos += 8;
-
-    // Draw table content
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        // Add new page if content exceeds page height
-        doc.addPage();
-        yPos = 20;
-
-        // Add table header on new page
-        doc.setFillColor(240, 240, 240);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-
-        doc.text("item Name", margin + 3, yPos + 5.5);
-        doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-        doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-        doc.text(
-          "Qty",
-          margin + col1Width + col2Width + col3Width + 3,
-          yPos + 5.5,
-        );
-        doc.text(
-          "Item Code",
-          margin + col1Width + col2Width + col3Width + col4Width + 3,
-          yPos + 5.5,
-        );
-
-        yPos += 8;
-      }
-
-      // Alternate row colors for better readability
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 248, 248);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-      }
-
-      // Truncate long text to fit in columns
-      const truncateText = (text, maxLength) => {
-        if (!text) return "N/A";
-        return text.length > maxLength
-          ? text.substring(0, maxLength) + "..."
-          : text;
-      };
-
-      doc.text(
-        truncateText(item?.itemDescription || "N/A", 25),
-        margin + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.serialNumber || "N/A", 15),
-        margin + col1Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.categoryDescription || "N/A", 12),
-        margin + col1Width + col2Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        item?.itemQuantity?.toString() || "1",
-        margin + col1Width + col2Width + col3Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.itemCode || "N/A", 15),
-        margin + col1Width + col2Width + col3Width + col4Width + 3,
-        yPos + 5.5,
-      );
-
-      // Draw horizontal line after each row
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width + col5Width,
-        yPos + 8,
-      );
-
-      yPos += 8;
-    });
-
-    // Footer
-    const footerYPos = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      "This is an electronically generated document and does not require signature.",
-      pageWidth / 2,
-      footerYPos,
-      { align: "center" },
-    );
-
-    // Save the PDF
-    doc.save(`SLT_GatePass_DESCRIPTIONs_${request.refNo}.pdf`);
+    // Open the generated PDF in a new tab so it matches the styled PDF layout
+    generateDESCRIPTIONDetailsPDF(fullRequest, { openInNewWindow: true });
   };
 
   return (
@@ -3907,12 +3085,12 @@ const RequestDetailsModal = ({
       <div className="bg-white rounded-2xl max-w-4xl w-full flex flex-col h-[95vh] overflow-hidden shadow-2xl">
         {/* Header */}
         <div
-          className={`p-3 pl-6 pr-6 shrink-0 ${
+          className={`p-3 pl-6 pr-6 flex-shrink-0 ${
             activeTab === "pending"
-              ? "bg-linear-to-r from-amber-600 to-orange-300"
+              ? "bg-gradient-to-r from-amber-600 to-orange-300"
               : activeTab === "approved"
-                ? "bg-linear-to-br from-emerald-600 to-green-600"
-                : "bg-linear-to-br from-rose-600 to-red-400"
+                ? "bg-gradient-to-br from-emerald-600 to-green-600"
+                : "bg-gradient-to-br from-rose-600 to-red-400"
           }`}
         >
           <div className="flex justify-between items-center">
@@ -3970,7 +3148,7 @@ const RequestDetailsModal = ({
         </div>
 
         {/* Main Content - Make this scrollable */}
-        <div className="grow overflow-y-auto p-6">
+        <div className="flex-grow overflow-y-auto p-6">
           {/* Request Details Tab */}
           {currentTab === "details" && (
             <>
@@ -4039,12 +3217,17 @@ const RequestDetailsModal = ({
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
                   <FaBoxOpen className="mr-2" /> item Details
                   <button
-                    onClick={() =>
-                      generateDESCRIPTIONDetailsPDF(
-                        request.items,
-                        request.refNo,
-                      )
-                    }
+                    onClick={() => {
+                      try {
+                        generateDESCRIPTIONDetailsPDF({
+                          ...request,
+                          transporterDetails,
+                        });
+                      } catch (err) {
+                        console.error("PDF generation failed:", err);
+                        showToast("Failed to generate PDF: " + err.message, "error");
+                      }
+                    }}
                     className="ml-auto px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center transition-colors"
                   >
                     <FaFilePdf className="mr-2" /> Download items PDF
@@ -4644,7 +3827,7 @@ const RequestDetailsModal = ({
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
               <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl">
                 {/* Modal Header */}
-                <div className="bg-linear-to-r from-blue-600 to-blue-800 p-6">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6">
                   <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-white flex items-center">
                       <FaPlus className="mr-3" /> Add New Returnable item{" "}
@@ -4839,13 +4022,13 @@ const RequestDetailsModal = ({
                   {VerifyStatus
                     ? "Verification Details"
                     : "Verification Details"}
-                </h3>
+                </h3> 
 
                 {/* Toggle between SLT and Non-SLT */}
                 <div className="flex space-x-4 mb-6">
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "slt"
+                      staffType === "SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
@@ -4855,7 +4038,7 @@ const RequestDetailsModal = ({
                   </button>
                   <button
                     className={`px-4 py-2 rounded-lg font-medium text-sm flex items-center ${
-                      staffType === "non-slt"
+                      staffType === "Non-SLT"
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                     }`}
@@ -4870,7 +4053,7 @@ const RequestDetailsModal = ({
                     {/* SLT Employee Search */}
                     <div className="mb-4">
                       <div className="flex items-center mb-4">
-                        <div className="grow">
+                        <div className="flex-grow">
                           {serviceIdError && (
                             <p className="text-red-500 text-xs mb-1">
                               {serviceIdError}
@@ -5114,7 +4297,7 @@ const RequestDetailsModal = ({
                 </h3>
 
                 {/* Report Generation Card */}
-                <div className="mb-6 bg-linear-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100 shadow-sm">
+                <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100 shadow-sm">
                   <div className="flex flex-col md:flex-row items-center justify-between">
                     <div className="mb-4 md:mb-0">
                       <h4 className="text-lg font-semibold text-blue-800 mb-1">
@@ -5381,8 +4564,8 @@ const RequestDetailsModal = ({
         </div>
 
         {/* Fixed bottom section for comments and buttons */}
-        <div className="shrink-0">
-          <div className="border-t border-gray-200 p-4 bg-white shrink-0">
+        <div className="flex-shrink-0">
+          <div className="border-t border-gray-200 p-4 bg-white flex-shrink-0">
             <div className="flex flex-col md:flex-row gap-4">
               {/* Previous/Next Buttons */}
               {currentTab !== "navigation" && currentTab !== "details" && (
@@ -5400,7 +4583,12 @@ const RequestDetailsModal = ({
                   </button>
                   <button
                     onClick={goToNextTab}
-                    className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium flex items-center"
+                    disabled={currentTab === "loading" && !isReadyForNextTab()}
+                    className={`px-4 py-2 rounded-lg text-white text-sm font-medium flex items-center transition-colors ${
+                      currentTab === "loading" && !isReadyForNextTab()
+                        ? "bg-gray-300 cursor-not-allowed"
+                        : "bg-blue-500 hover:bg-blue-600"
+                    }`}
                   >
                     Next <FaArrowRight className="ml-2" />
                   </button>
@@ -5528,7 +4716,7 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50">
-      <div className="bg-linear-to-br from-gray-900 to-gray-800 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border border-gray-700">
+      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border border-gray-700">
         <div className="relative">
           {/* Main display area */}
           <div className="h-80 md:h-96 overflow-hidden relative bg-black">
@@ -5588,7 +4776,7 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
           </div>
 
           {/* Header with close button */}
-          <div className="absolute top-0 left-0 right-0 p-4 bg-linear-to-b from-black/70 to-transparent">
+          <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex justify-between items-center">
               <h3 className="text-xl font-semibold text-white">
                 {itemDescription}
