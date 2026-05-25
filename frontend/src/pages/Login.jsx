@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { useToast } from "../components/ToastProvider.jsx";
 
 const Login = () => {
-  const [userType, setUserType] = useState("SLT");
+  const [userType] = useState("SLT");
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState(false);
@@ -96,7 +96,7 @@ const Login = () => {
       }
     } catch (error) {
       setLoginError(true);
-      showToast("Login failed. Please try again.", "error");
+      showToast(error.message || "Login failed. Please try again.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -372,7 +372,7 @@ const Login = () => {
 
               <div className="mt-8 text-center">
                 <p className="text-sm text-gray-600">
-                  Don't have an account?{" "}
+                  Don&apos;t have an account?{" "}
                   <a
                     href="#"
                     className="font-medium text-blue-600 hover:text-blue-800 transition-colors"
