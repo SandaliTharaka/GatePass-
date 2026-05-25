@@ -61,6 +61,40 @@ const getPdfStatusClass = (status = "") => {
   return "status status-pending";
 };
 
+const buildTransportPdfRows = (transport = {}, transporterDetails = null) => {
+  const rows = [
+    ["Method", transport.transportMethod || "N/A"],
+    ["Type", transport.transporterType || "N/A"],
+  ];
+
+  if (String(transport.transporterType || "").toUpperCase() === "SLT") {
+    rows.push(["Transporter", transporterDetails?.name || transport.transporterName || "N/A"]);
+    rows.push(["Service No", transporterDetails?.serviceNo || transport.transporterServiceNo || "N/A"]);
+    rows.push(["Designation", transporterDetails?.designation || transport.transporterDesignation || "N/A"]);
+    rows.push(["Section", transporterDetails?.section || transport.transporterSection || "N/A"]);
+    rows.push(["Group", transporterDetails?.group || transport.transporterGroup || "N/A"]);
+    rows.push(["Contact", transporterDetails?.contactNo || transport.transporterContact || "N/A"]);
+  } else if (
+    String(transport.transporterType || "").toUpperCase() === "NON-SLT" ||
+    transport.nonSLTTransporterName ||
+    transport.nonSLTTransporterNIC ||
+    transport.nonSLTTransporterPhone ||
+    transport.nonSLTTransporterEmail
+  ) {
+    rows.push(["Transporter", transport.nonSLTTransporterName || "N/A"]);
+    rows.push(["NIC", transport.nonSLTTransporterNIC || "N/A"]);
+    rows.push(["Phone", transport.nonSLTTransporterPhone || "N/A"]);
+    rows.push(["Email", transport.nonSLTTransporterEmail || "N/A"]);
+  }
+
+  if (String(transport.transportMethod || "").toLowerCase() === "vehicle") {
+    rows.push(["Vehicle No", transport.vehicleNumber || "N/A"]);
+    rows.push(["Vehicle Model", transport.vehicleModel || "N/A"]);
+  }
+
+  return rows;
+};
+
 const mapErpEmployeeToReceiver = (employee, fallbackServiceNo) => {
   if (!employee) return null;
 
@@ -980,6 +1014,30 @@ const RequestDetailsModal = ({
 
       yPos += 10;
 
+      // Transport Details Section
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text("Transport Details", margin, yPos);
+      yPos += 10;
+
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      const transportRows = buildTransportPdfRows(
+        request?.transport || request?.requestDetails?.transport || {},
+      );
+
+      transportRows.forEach(([label, value]) => {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.text(`${label}: ${value || "N/A"}`, margin, yPos);
+        yPos += 6;
+      });
+
+      yPos += 10;
+
       // items Section
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
@@ -994,6 +1052,13 @@ const RequestDetailsModal = ({
       let xPos = margin;
 
       // Draw header background
+
+    drawKeyValueBox(
+      "Transport Details",
+      buildTransportPdfRows(
+        requestCore.transport || fullRequest.transport || fullRequest.transportData || {},
+      ),
+    );
       doc.rect(
         margin,
         yPos,
@@ -1220,6 +1285,28 @@ const RequestDetailsModal = ({
       );
 
       yPos += 8;
+    });
+
+    const requestCore = request?.requestDetails || request || {};
+
+    doc.setFontSize(14);
+    doc.setTextColor(0, 0, 0);
+    doc.text("Transport Details", margin, yPos + 12);
+
+    let transportY = yPos + 22;
+    doc.setFontSize(10);
+    doc.setTextColor(80, 80, 80);
+
+    buildTransportPdfRows(
+      requestCore.transport || request?.transport || request?.transportData || {},
+    ).forEach(([label, value]) => {
+      if (transportY > 270) {
+        doc.addPage();
+        transportY = 20;
+      }
+
+      doc.text(`${label}: ${value || "N/A"}`, margin, transportY);
+      transportY += 6;
     });
 
     const footerYPos = doc.internal.pageSize.getHeight() - 10;
