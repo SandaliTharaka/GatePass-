@@ -409,13 +409,7 @@ const NewRequest = () => {
 
       console.log("Item data received in frontend:", itemData);
 
-      const foundItem =
-        itemData &&
-        (itemData.serialNumber?.trim() ||
-          itemData.itemCode?.trim() ||
-          itemData.itemDescription?.trim() ||
-          itemData.categoryDescription?.trim() ||
-          itemData.itemCategory?.trim());
+      const foundItem = !!(itemData?.foundInErp);
 
       // Populate form with API data
       setCurrentItem((prev) => ({
@@ -429,7 +423,7 @@ const NewRequest = () => {
         returnable: prev.returnable || "No",
         images: prev.images || [],
         returnDate: prev.returnDate || "",
-        itemFound: !!foundItem,
+        itemFound: foundItem,
       }));
 
       console.log("Current item after update:", {
@@ -442,11 +436,12 @@ const NewRequest = () => {
 
     } catch (error) {
       console.error("Error fetching item:", error);
-      // Silently fail - user can fill manually
-      // Only show message if it's not a 404
-      if (error.response?.status !== 404) {
-        console.log("Item lookup failed, user can fill manually");
-      }
+      // Serial not found in ERP — mark explicitly so 2 images become mandatory
+      setCurrentItem((prev) => ({
+        ...prev,
+        serialNumber: serialNumber,
+        itemFound: false,
+      }));
     } finally {
       setIsSearchingItem(false);
     }
