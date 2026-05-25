@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import {
   getPendingStatuses,
   getApprovedStatuses,
@@ -477,6 +477,8 @@ const Verify = () => {
   const [transportData, setTransportData] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const isRejectingRef = useRef(false);
   const { showToast } = useToast();
   const location = useLocation();
 
@@ -2079,11 +2081,16 @@ const Verify = () => {
   };
 
   const handleReject = async (item) => {
+    if (isRejectingRef.current) return;
+
     try {
       if (!comment || comment.trim() === "") {
         showToast("Comment is required to reject the item.", "warning");
         return;
       }
+      isRejectingRef.current = true;
+      setIsRejecting(true);
+
       // Call API to reject status with comment
       const updatedStatus = await rejectStatus(item.refNo, comment);
 
@@ -2118,6 +2125,9 @@ const Verify = () => {
       setComment("");
     } catch (error) {
       console.error("Error rejecting status:", error.message);
+    } finally {
+      isRejectingRef.current = false;
+      setIsRejecting(false);
     }
   };
 
@@ -2638,6 +2648,7 @@ const Verify = () => {
         comment={comment}
         handleApprove={handleApprove}
         handleReject={handleReject}
+        isRejecting={isRejecting}
         setComment={setComment}
         transporterDetails={transportData}
         setStaffType={setStaffType}
@@ -2672,6 +2683,7 @@ const RequestDetailsModal = ({
   setComment,
   handleApprove,
   handleReject,
+  isRejecting,
   transporterDetails,
   setStaffType,
   setServiceId,
@@ -5133,9 +5145,15 @@ const RequestDetailsModal = ({
                       <div className="flex space-x-4">
                         <button
                           onClick={() => handleReject(request)}
-                          className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium flex items-center"
+                          disabled={isRejecting}
+                          className={`px-4 py-2 rounded-lg text-white text-sm font-medium flex items-center ${
+                            isRejecting
+                              ? "bg-red-300 cursor-not-allowed"
+                              : "bg-red-500 hover:bg-red-600"
+                          }`}
                         >
-                          <FaTimes className="mr-2" /> Reject
+                          <FaTimes className="mr-2" />
+                          {isRejecting ? "Rejecting..." : "Reject"}
                         </button>
                         <button
                           onClick={() => handleApprove(request)}

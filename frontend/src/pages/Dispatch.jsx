@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import {
   getPendingStatuses,
   getApprovedStatuses,
@@ -448,6 +448,8 @@ const Dispatch = () => {
   const [approvedDESCRIPTIONs, setApprovedDESCRIPTIONs] = useState([]);
   const [rejectedDESCRIPTIONs, setRejectedDESCRIPTIONs] = useState([]);
   const [transportData, setTransportData] = useState(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const isRejectingRef = useRef(false);
   const { showToast } = useToast();
 
   const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
@@ -1470,6 +1472,8 @@ const Dispatch = () => {
   };
 
   const handleReject = async (item) => {
+    if (isRejectingRef.current) return;
+
     if (isSuperAdmin) {
       showToast("Super Admin has view-only access.", "warning");
       return;
@@ -1480,6 +1484,9 @@ const Dispatch = () => {
         showToast("Comment is required to reject the item.", "warning");
         return;
       }
+      isRejectingRef.current = true;
+      setIsRejecting(true);
+
       const updatedStatus = await rejectStatus(item.refNo, comment);
 
       const rejectedDESCRIPTION = {
@@ -1541,6 +1548,9 @@ const Dispatch = () => {
     } catch (error) {
       showToast("Error rejecting the item.", "error");
       console.error("Error rejecting status:", error.message);
+    } finally {
+      isRejectingRef.current = false;
+      setIsRejecting(false);
     }
   };
 
@@ -2103,6 +2113,7 @@ const Dispatch = () => {
         comment={comment}
         handleApprove={handleApprove}
         handleReject={handleReject}
+        isRejecting={isRejecting}
         sendReturnEmail={sendReturnEmail}
         sendReturnTOPetrolLeaderEmail={sendReturnTOPetrolLeaderEmail}
         setComment={setComment}
@@ -2124,6 +2135,7 @@ const RequestDetailsModal = ({
   setComment,
   handleApprove,
   handleReject,
+  isRejecting,
   sendReturnEmail,
   sendReturnTOPetrolLeaderEmail,
   showToast,
@@ -3618,9 +3630,15 @@ const RequestDetailsModal = ({
                       <div className="flex space-x-4">
                         <button
                           onClick={() => handleReject(request)}
-                          className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium flex items-center"
+                          disabled={isRejecting}
+                          className={`px-4 py-2 rounded-lg text-white text-sm font-medium flex items-center ${
+                            isRejecting
+                              ? "bg-red-300 cursor-not-allowed"
+                              : "bg-red-500 hover:bg-red-600"
+                          }`}
                         >
-                          <FaTimes className="mr-2" /> Reject
+                          <FaTimes className="mr-2" />
+                          {isRejecting ? "Rejecting..." : "Reject"}
                         </button>
                         <button
                           onClick={() => handleApprove(request)}
