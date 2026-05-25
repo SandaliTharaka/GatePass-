@@ -209,58 +209,25 @@ const getItemBySerialNumber = async (serialNumber) => {
       JSON.stringify(response.data, null, 2),
     );
 
-    // Handle the response
-    if (response.data) {
-      let itemData = response.data;
-
-      // If response has a data property
-      if (response.data.data) {
-        itemData = response.data.data;
-      }
-
-      // If itemData is an array, take the first item
-      if (Array.isArray(itemData) && itemData.length > 0) {
-        itemData = itemData[0];
-      }
-
-      // Transform the response to match expected format
-      // Handle ERP API's weird capitalization
-      const transformedItem = {
-        serialNumber:
-          itemData.seriaL_NUMBER ||
-          itemData.serialNumber ||
-          itemData.serial_number ||
-          serialNumber,
-        itemCode:
-          itemData.iteM_CODE ||
-          itemData.itemCode ||
-          itemData.item_code ||
-          "",
-        itemDescription:
-          itemData.iteM_DESCRIPTION ||
-          itemData.itemDescription ||
-          itemData.item_description ||
-          itemData.description ||
-          "",
-        itemCategory:
-          itemData.iteM_CATEGORY ||
-          itemData.itemCategory ||
-          itemData.item_category ||
-          "",
-        categoryDescription:
-          itemData.categorY_DESCRIPTION ||
-          itemData.categoryDescription ||
-          itemData.category_description ||
-          itemData.iteM_CATEGORY ||
-          itemData.itemCategory ||
-          "",
-      };
-
-      console.log("Transformed item data:", transformedItem);
-      return transformedItem;
+    // API always returns 200 with { success, message, data: [...] }
+    // data is an empty array when serial not found
+    const dataArray = response.data?.data;
+    if (!Array.isArray(dataArray) || dataArray.length === 0) {
+      throw new Error(`Item with serial number ${serialNumber} not found`);
     }
 
-    throw new Error(`Item with serial number ${serialNumber} not found`);
+    const itemData = dataArray[0];
+    const transformedItem = {
+      serialNumber: itemData.seriaL_NUMBER || serialNumber,
+      itemCode: itemData.iteM_CODE || "",
+      itemDescription: itemData.iteM_DESCRIPTION || "",
+      itemCategory: itemData.iteM_CATEGORY || "",
+      categoryDescription: itemData.categorY_DESCRIPTION || itemData.iteM_CATEGORY || "",
+      foundInErp: true,
+    };
+
+    console.log("Transformed item data:", transformedItem);
+    return transformedItem;
   } catch (error) {
     console.error(`Error fetching item ${serialNumber}:`, error.message);
     if (error.code === "ECONNREFUSED" || error.code === "ETIMEDOUT") {
