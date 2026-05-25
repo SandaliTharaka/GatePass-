@@ -393,6 +393,7 @@ exports.updateRejected = async (req, res) => {
     if (!validation.isValid) {
       return res.status(400).json({
         error: "Validation failed",
+        message: validation.errors.join(", "),
         details: validation.errors,
       });
     }

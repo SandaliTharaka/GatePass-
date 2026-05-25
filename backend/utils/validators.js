@@ -290,8 +290,6 @@ const validateApprovalAction = (data, action) => {
   if (action === "reject") {
     if (!data.comment || data.comment.trim() === "") {
       errors.push("Comment is required when rejecting");
-    } else if (data.comment.trim().length < 10) {
-      errors.push("Rejection comment must be at least 10 characters");
     }
   }
 

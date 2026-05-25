@@ -673,8 +673,10 @@ const ExecutiveApproval = () => {
       // Reset modal and comment
       setShowModal(false);
       setComment("");
+      showToast("Request rejected successfully", "success");
     } catch (error) {
       console.error("Error rejecting status:", error.message);
+      showToast(error.message || "Failed to reject request", "error");
     }
   };
 

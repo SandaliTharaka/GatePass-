@@ -61,11 +61,13 @@ export const rejectStatus = async (referenceNumber, comment) => {
   try {
     const response = await axiosInstance.put(
       `/approve/${referenceNumber}/reject`,
-      { comment }
+      { comment: String(comment || "").trim() }
     );
     return response.data;
   } catch (error) {
-    throw new Error(error.response?.data?.message || "Failed to reject status");
+    const data = error.response?.data;
+    const details = Array.isArray(data?.details) ? data.details.join(", ") : null;
+    throw new Error(data?.message || details || data?.error || "Failed to reject status");
   }
 };
 
