@@ -401,20 +401,29 @@ const NewRequest = () => {
       return;
     }
 
+    // Clear stale ERP fields immediately before every new lookup
+    setCurrentItem((prev) => ({
+      ...prev,
+      serialNumber,
+      itemCode: "",
+      itemDescription: "",
+      itemCategory: "",
+      categoryDescription: "",
+      itemFound: false,
+    }));
+
     setIsSearchingItem(true);
     try {
       const { getItemBySerialNumber } =
         await import("../services/itemHolidayApiService.js");
       const itemData = await getItemBySerialNumber(serialNumber);
 
-      console.log("Item data received in frontend:", itemData);
-
       const foundItem = !!(itemData?.foundInErp);
 
       // Populate form with API data
       setCurrentItem((prev) => ({
         ...prev,
-        serialNumber: serialNumber,
+        serialNumber,
         itemCode: itemData.itemCode || "",
         itemDescription: itemData.itemDescription || "",
         itemCategory: itemData.itemCategory || "",
@@ -425,21 +434,12 @@ const NewRequest = () => {
         returnDate: prev.returnDate || "",
         itemFound: foundItem,
       }));
-
-      console.log("Current item after update:", {
-        serialNumber: serialNumber,
-        itemCode: itemData.itemCode,
-        itemDescription: itemData.itemDescription,
-        itemCategory: itemData.itemCategory,
-        categoryDescription: itemData.categoryDescription,
-      });
-
     } catch (error) {
       console.error("Error fetching item:", error);
       // Serial not found in ERP — mark explicitly so 2 images become mandatory
       setCurrentItem((prev) => ({
         ...prev,
-        serialNumber: serialNumber,
+        serialNumber,
         itemFound: false,
       }));
     } finally {
@@ -1922,14 +1922,17 @@ const NewRequest = () => {
                           const serialNumber = sanitizeSerialNumberInput(
                             e.target.value,
                           );
+                          // Clear all ERP-fetched fields immediately on every keystroke
                           setCurrentItem({
                             ...currentItem,
-                            serialNumber: serialNumber,
+                            serialNumber,
+                            itemCode: "",
+                            itemDescription: "",
+                            itemCategory: "",
+                            categoryDescription: "",
                             itemFound: false,
                           });
-                          // Validate in real-time while user types
                           setSerialNumberError(validateSerialNumber(serialNumber));
-                          // Auto-lookup after user stops typing (debounced)
                           if (serialNumber.trim()) {
                             clearTimeout(window.serialLookupTimeout);
                             window.serialLookupTimeout = setTimeout(() => {
