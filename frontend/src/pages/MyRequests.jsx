@@ -61,7 +61,7 @@ const StatusPill = ({ statusCode, onClick, referenceNumber }) => {
       return `${baseStyles} bg-emerald-100 text-emerald-800`;
     if (status.includes("Rejected"))
       return `${baseStyles} bg-rose-100 text-rose-800`;
-    if (status === "Canceled") return `${baseStyles} bg-gray-100 text-gray-800`;
+    if (status === "Canceled") return `${baseStyles} bg-rose-100 text-rose-800`;
     return `${baseStyles} bg-gray-100 text-gray-800`;
   };
 
@@ -395,174 +395,408 @@ const RequestDetailsModal = ({
     }
   };
 
-  const generateItemDetailsPDF = (items, refNo) => {
-    const doc = new jsPDF();
+  const generateItemDetailsPDF = (fullRequest) => {
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 36;
+    const usableWidth = pageWidth - margin * 2;
+    const lh = 12;
+    const palette = {
+      navy: [20, 55, 120],
+      slate: [78, 92, 115],
+      headingBg: [240, 245, 255],
+      border: [210, 218, 230],
+      tableHeader: [226, 234, 247],
+      text: [33, 37, 41],
+      rowAlt: [249, 251, 255],
+    };
 
-    // Add SLT logo
-    try {
-      doc.addImage(logoUrl, "PNG", margin, 10, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
+    const addHeader = () => {
+      try {
+        doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
+      } catch (e) {
+        // ignore logo rendering issues
+      }
+
+      // Header top rule (reduced gap under reference)
+      doc.setDrawColor(...palette.navy);
+      doc.setLineWidth(1.1);
+      doc.line(margin, 64, pageWidth - margin, 64);
+
+      doc.setFontSize(17);
+      doc.setTextColor(...palette.navy);
+      doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text("Official Item Movement Record", pageWidth / 2, 46, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
+        align: "right",
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(...palette.text);
+      const refText = `Reference: ${fullRequest.referenceNumber || fullRequest.refNo || "-"}`;
+      doc.text(refText, pageWidth / 2, 58, { align: "center" });
+
+    };
+
+    const ensurePage = (neededHeight) => {
+      if (currentY + neededHeight > pageHeight - margin - 22) {
+        doc.addPage();
+        addHeader();
+        currentY = 84;
+      }
+    };
+
+    const drawKeyValueBox = (title, fields) => {
+      const titleH = 18;
+      const valueMaxWidth = usableWidth * 0.62;
+      const rows = fields.map((f) => {
+        const valueLines = doc.splitTextToSize(String(f[1] || "-"), valueMaxWidth);
+        const rowHeight = Math.max(18, valueLines.length * lh + 6);
+        return { key: f[0], valueLines, rowHeight };
+      });
+      const contentHeight = rows.reduce((sum, r) => sum + r.rowHeight, 0);
+
+      ensurePage(titleH + contentHeight + 18);
+
+      doc.setFillColor(...palette.headingBg);
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY, usableWidth, titleH, "FD");
+
+      doc.setFontSize(10.5);
+      doc.setTextColor(...palette.navy);
+      doc.text(title, margin + 8, currentY + 12);
+
+      let rowTop = currentY + titleH;
+      rows.forEach((row, idx) => {
+        if (idx % 2 === 1) {
+          doc.setFillColor(...palette.rowAlt);
+          doc.rect(margin, rowTop, usableWidth, row.rowHeight, "F");
+        }
+
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.slate);
+        doc.text(String(row.key || "-"), margin + 8, rowTop + 12);
+
+        doc.setTextColor(...palette.text);
+        row.valueLines.forEach((line, lineIdx) => {
+          doc.text(line, margin + usableWidth * 0.34 + 8, rowTop + 12 + lineIdx * lh);
+        });
+
+        doc.setDrawColor(...palette.border);
+        doc.setLineWidth(0.4);
+        doc.line(margin, rowTop + row.rowHeight, margin + usableWidth, rowTop + row.rowHeight);
+        rowTop += row.rowHeight;
+      });
+
+      doc.rect(margin, currentY, usableWidth, titleH + contentHeight);
+      currentY = rowTop + 12;
+    };
+
+    // start
+    addHeader();
+    let currentY = 84;
+
+    // Sender details
+    const senderInfo =
+      user ||
+      fullRequest.sender ||
+      fullRequest.senderDetails ||
+      fullRequest.user ||
+      fullRequest.requestDetails?.senderDetails ||
+      fullRequest.request?.senderDetails ||
+      {};
+
+    drawKeyValueBox("Sender Details", [
+      ["Name", senderInfo.name || senderInfo.displayName || "-"],
+      ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || senderInfo.senderServiceNo || fullRequest.senderServiceNo || "-"],
+      ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
+      ["Section", senderInfo.section || senderInfo.department || "-"],
+      ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
+      ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
+    ]);
+
+    const formatDateValue = (dateValue) => {
+      if (!dateValue) return "-";
+      const dateObj = new Date(dateValue);
+      if (Number.isNaN(dateObj.getTime())) return String(dateValue);
+      return dateObj.toLocaleDateString();
+    };
+
+    // Item Details (match the same boxed table layout as other sections)
+    const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
+    if (!items.length) {
+      drawKeyValueBox("Item Details", [["Items", "No items available"]]);
+    } else {
+      items.forEach((it, idx) => {
+        const itemFields = [
+          ["Description", it.itemDescription || it.description || "-"],
+          ["Serial No", it.serialNumber || "-"],
+          ["Item Code", it.itemCode || "-"],
+          ["Category", it.categoryDescription || it.category || "-"],
+          ["Quantity", String(it.itemQuantity || it.quantity || "-")],
+          ["Status", it.status || "-"],
+        ];
+
+        const isReturnable =
+          it.itemReturnable ||
+          it.isReturnable ||
+          String(it.status || "").toLowerCase() === "return to sender" ||
+          String(it.status || "").toLowerCase() === "returnable";
+
+        if (isReturnable) {
+          itemFields.push([
+            "Return Date",
+            formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+          ]);
+        }
+
+        drawKeyValueBox(`Item Details - Item ${idx + 1}`, itemFields);
+      });
     }
 
-    // Header
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 153); // SLT blue color
-    doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 20, {
-      align: "center",
-    });
+    const hdrH = 20;
 
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Reference: ${request.referenceNumber}`, pageWidth / 2, 30, {
-      align: "center",
-    });
+    // Returnable Items (if any exist)
+    const returnableItems = items.filter(it => it.itemReturnable || it.isReturnable || it.status === "return to Sender");
+    if (returnableItems.length > 0) {
+      ensurePage(30 + 40);
+      doc.setFontSize(10.5);
+      doc.setTextColor(...palette.navy);
+      doc.text("Returnable Items", margin, currentY);
+      currentY += 14;
 
-    // Add current date
-    const currentDate = new Date().toLocaleDateString();
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${currentDate}`, pageWidth - margin, 20, {
-      align: "right",
-    });
+      const retCols = ["Description", "Serial No", "Item Code", "Category", "Qty", "Return Date"];
+      const retColW = [usableWidth * 0.28, usableWidth * 0.14, usableWidth * 0.12, usableWidth * 0.12, usableWidth * 0.09, usableWidth * 0.25];
+      const retColX = [margin];
+      for (let i = 1; i < retColW.length; i++) retColX[i] = retColX[i - 1] + retColW[i - 1];
 
-    // Horizontal line
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, 35, pageWidth - margin, 35);
+      // header row
+      doc.setFillColor(...palette.tableHeader);
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.navy);
+      retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+      currentY += hdrH + 6;
 
-    // Items Table
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text("Item Details", margin, 45);
+      returnableItems.forEach((it, idx) => {
+        const desc = it.itemDescription || it.description || "-";
+        const descLines = doc.splitTextToSize(desc, retColW[0] - 8);
+        const rowH = Math.max(20, descLines.length * lh + 6);
 
-    // Table header
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.setDrawColor(200, 200, 200);
+        if (currentY + rowH > pageHeight - margin) {
+          doc.addPage();
+          addHeader();
+          currentY = 84;
+          // redraw header
+          doc.setFillColor(...palette.tableHeader);
+          doc.setDrawColor(...palette.border);
+          doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+          doc.setFontSize(9);
+          doc.setTextColor(...palette.navy);
+          retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+          currentY += hdrH + 6;
+        }
 
-    // Define column widths
-    const col1Width = 70; // Description
-    const col2Width = 40; // Serial Number
-    const col3Width = 30; // Item Code
-    const col4Width = 40; // Category
+        if (idx % 2 === 1) {
+          doc.setFillColor(...palette.rowAlt);
+          doc.rect(margin, currentY - 2, usableWidth, rowH + 4, "F");
+        }
+        doc.setDrawColor(...palette.border);
+        doc.rect(margin, currentY - 2, usableWidth, rowH + 4);
 
-    // Draw table header
-    doc.setFillColor(240, 240, 240);
-    doc.rect(
-      margin,
-      yPos,
-      col1Width + col2Width + col3Width + col4Width,
-      8,
-      "F",
-    );
-
-    doc.text("Description", margin + 3, yPos + 5.5);
-    doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-    doc.text("Item Code", margin + col1Width + col2Width + 3, yPos + 5.5);
-    doc.text(
-      "Category",
-      margin + col1Width + col2Width + col3Width + 3,
-      yPos + 5.5,
-    );
-
-    yPos += 8;
-
-    // Draw table content
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        // Add new page if content exceeds page height
-        doc.addPage();
-        yPos = 20;
-
-        // Add table header on new page
-        doc.setFillColor(240, 240, 240);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width,
-          8,
-          "F",
-        );
-
-        doc.text("Description", margin + 3, yPos + 5.5);
-        doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-        doc.text("Item Code", margin + col1Width + col2Width + 3, yPos + 5.5);
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.text);
+        descLines.forEach((ln, li) => doc.text(ln, retColX[0] + 4, currentY + 10 + li * lh));
+        doc.text(it.serialNumber || "-", retColX[1] + 4, currentY + 12);
+        doc.text(it.itemCode || "-", retColX[2] + 4, currentY + 12);
+        doc.text(it.categoryDescription || it.category || "-", retColX[3] + 4, currentY + 12);
+        doc.text(String(it.itemQuantity || it.quantity || "-"), retColX[4] + 4, currentY + 12);
         doc.text(
-          "Category",
-          margin + col1Width + col2Width + col3Width + 3,
-          yPos + 5.5,
+          formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+          retColX[5] + 4,
+          currentY + 12,
         );
 
-        yPos += 8;
-      }
+        currentY += rowH + 8;
+      });
+      currentY += 4;
+    }
 
-      // Alternate row colors for better readability
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 248, 248);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width,
-          8,
-          "F",
-        );
-      }
+    // Location (always include required 3 fields)
+    drawKeyValueBox("Location Details", [
+      [
+        "Out Location",
+        fullRequest.outLocation ||
+          fullRequest.requestDetails?.outLocation ||
+          fullRequest.request?.outLocation ||
+          fullRequest.companyName ||
+          fullRequest.requestDetails?.companyName ||
+          fullRequest.request?.companyName ||
+          "-",
+      ],
+      [
+        "In Location",
+        fullRequest.inLocation ||
+          fullRequest.requestDetails?.inLocation ||
+          fullRequest.request?.inLocation ||
+          "-",
+      ],
+    ]);
 
-      // Truncate long text to fit in columns
-      const truncateText = (text, maxLength) => {
-        if (!text) return "N/A";
-        return text.length > maxLength
-          ? text.substring(0, maxLength) + "..."
-          : text;
+    // Receiver (support all response shapes so PDF always includes submitted values)
+    const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
+    const isNonSltDestination =
+      fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
+
+    const recv =
+      fullRequest.receiver ||
+      fullRequest.receiverDetails ||
+      receiver || {
+        name: requestCore.receiverName || fullRequest.receiverName || "-",
+        nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
+        contactNo:
+          requestCore.receiverContact || fullRequest.receiverContact || "-",
+        serviceNo:
+          requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+        group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
+        companyName:
+          requestCore.companyName || fullRequest.companyName || "-",
+        email: requestCore.receiverEmail || fullRequest.receiverEmail || "-",
       };
 
-      doc.text(
-        truncateText(item?.itemDescription || "N/A", 30),
-        margin + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.serialNumber || "N/A", 15),
-        margin + col1Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.itemCode || "-", 12),
-        margin + col1Width + col2Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.categoryDescription || "N/A", 18),
-        margin + col1Width + col2Width + col3Width + 3,
-        yPos + 5.5,
-      );
+    if (isNonSltDestination) {
+      drawKeyValueBox("Receiver Details", [
+        ["Name", recv.name || requestCore.receiverName || "-"],
+        [
+          "Company",
+          fullRequest.companyName || requestCore.companyName || recv.companyName || "-",
+        ],
+        [
+          "Contact",
+          recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-",
+        ],
+        ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
+      ]);
+    } else {
+      drawKeyValueBox("Receiver Details", [
+        ["Name", recv.name || requestCore.receiverName || "-"],
+        [
+          "Service No",
+          recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+        ],
+        ["Group", recv.group || requestCore.receiverGroup || "-"],
+        ["Section", recv.section || requestCore.receiverSection || "-"],
+        ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
+        [
+          "Contact",
+          recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-",
+        ],
+      ]);
+    }
 
-      // Draw horizontal line after each row
-      doc.line(
+    // Transport (cover By Hand/Vehicle and SLT/Non-SLT with full fields)
+    const t =
+      fullRequest.transport ||
+      fullRequest.transportData ||
+      requestCore.transport ||
+      requestCore.transportData ||
+      {};
+
+    const transportRows = [
+      ["Transport Method", t.transportMethod || "-"],
+      ["Transporter Type", t.transporterType || "-"],
+    ];
+
+    if (String(t.transporterType || "").toUpperCase() === "SLT") {
+      transportRows.push([
+        "Service No",
+        t.transporterServiceNo || requestCore.transporterServiceNo || "-",
+      ]);
+      transportRows.push([
+        "Name",
+        transporterDetails?.name || t.transporterName || requestCore.transporterName || "-",
+      ]);
+      transportRows.push([
+        "Section",
+        transporterDetails?.section || t.transporterSection || requestCore.transporterSection || "-",
+      ]);
+      transportRows.push([
+        "Group",
+        transporterDetails?.group || t.transporterGroup || requestCore.transporterGroup || "-",
+      ]);
+      transportRows.push([
+        "Designation",
+        transporterDetails?.designation || t.transporterDesignation || requestCore.transporterDesignation || "-",
+      ]);
+      transportRows.push([
+        "Contact",
+        transporterDetails?.contactNo || t.transporterContact || requestCore.transporterContact || "-",
+      ]);
+    } else {
+      transportRows.push([
+        "Name",
+        t.nonSLTTransporterName || requestCore.nonSLTTransporterName || "-",
+      ]);
+      transportRows.push([
+        "NIC",
+        t.nonSLTTransporterNIC || requestCore.nonSLTTransporterNIC || "-",
+      ]);
+      transportRows.push([
+        "Contact",
+        t.nonSLTTransporterPhone || requestCore.nonSLTTransporterPhone || "-",
+      ]);
+      transportRows.push([
+        "Email",
+        t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-",
+      ]);
+    }
+
+    if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
+      transportRows.push([
+        "Vehicle No",
+        t.vehicleNumber || requestCore.vehicleNumber || "-",
+      ]);
+      transportRows.push([
+        "Vehicle Model",
+        t.vehicleModel || requestCore.vehicleModel || "-",
+      ]);
+    }
+
+    drawKeyValueBox("Transport Details", transportRows);
+
+    // footer
+    const pageCount = doc.getNumberOfPages();
+    for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
+      doc.setPage(pageNo);
+      const footerY = pageHeight - 24;
+      doc.setDrawColor(...palette.border);
+      doc.line(margin, footerY - 10, pageWidth - margin, footerY - 10);
+      doc.setFontSize(8);
+      doc.setTextColor(...palette.slate);
+      doc.text(
+        "Electronically generated gate pass document",
         margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width,
-        yPos + 8,
+        footerY,
       );
+      doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, {
+        align: "right",
+      });
+    }
 
-      yPos += 8;
-    });
-
-    // Footer
-    const footerYPos = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      "This is an electronically generated document and does not require signature.",
-      pageWidth / 2,
-      footerYPos,
-      { align: "center" },
-    );
-
-    // Save the PDF
-    doc.save(`SLT_GatePass_Items_${refNo}.pdf`);
+    const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
+    doc.save(`SLT_GatePass_${safeRef}.pdf`);
   };
 
   return (
@@ -639,12 +873,9 @@ const RequestDetailsModal = ({
               <button
                 onClick={() => {
                   try {
-                    generateItemDetailsPDF(
-                      request.items || [],
-                      request.referenceNumber,
-                    );
+                    generateItemDetailsPDF(request);
                   } catch (error) {
-                    console.error("Failed to generate items PDF:", error);
+                    console.error("Failed to generate PDF:", error);
                     alert("Failed to generate PDF. Please try again.");
                   }
                 }}
@@ -897,11 +1128,21 @@ const RequestDetailsModal = ({
                     <p className="text-gray-800">{receiver?.contactNo}</p>
                   </div>
                   {request?.isNonSltPlace && (
-                    <div>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                        Non-SLT Destination
-                      </span>
-                    </div>
+                    <>
+                      <div>
+                        <label className="text-sm font-medium text-gray-600">
+                          Email
+                        </label>
+                        <p className="text-gray-800">
+                          {receiver?.email || request?.receiverEmail || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                          Non-SLT Destination
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -1263,6 +1504,13 @@ const GatePassRequests = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const hasActiveFilters = searchTerm.trim() !== "" || statusFilter !== "all";
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+  };
+
   const handleOpenModal = async (request) => {
     setSelectedRequest(request);
 
@@ -1274,6 +1522,7 @@ const GatePassRequests = () => {
         name: request.receiverName,
         nic: request.receiverNIC,
         contactNo: request.receiverContact,
+        email: request.receiverEmail || request.receiver?.email || "N/A",
         serviceNo: request.receiverServiceNo || "N/A",
         group: "Non-SLT",
       });
@@ -1406,6 +1655,19 @@ const GatePassRequests = () => {
             </div>
           </div>
         </div>
+
+        {hasActiveFilters && (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <FaUndo className="mr-2" />
+              Clear Search
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
