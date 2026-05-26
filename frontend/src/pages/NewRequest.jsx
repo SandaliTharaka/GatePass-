@@ -371,8 +371,9 @@ const NewRequest = () => {
 
     const remainingSlots = Math.max(0, 5 - currentItem.images.length);
     if (remainingSlots <= 0) {
+      const minImagesRequired = currentItem.itemFound ? 1 : 2;
       showToast(
-        `Maximum 5 photos allowed per item${currentItem.itemFound ? "" : " (minimum 2 required)"}`,
+        `Maximum 5 photos allowed per item (minimum ${minImagesRequired} required)`,
         "warning",
       );
       e.target.value = "";
@@ -401,29 +402,26 @@ const NewRequest = () => {
       return;
     }
 
-    // Clear stale ERP fields immediately before every new lookup
-    setCurrentItem((prev) => ({
-      ...prev,
-      serialNumber,
-      itemCode: "",
-      itemDescription: "",
-      itemCategory: "",
-      categoryDescription: "",
-      itemFound: false,
-    }));
-
     setIsSearchingItem(true);
     try {
       const { getItemBySerialNumber } =
         await import("../services/itemHolidayApiService.js");
       const itemData = await getItemBySerialNumber(serialNumber);
 
-      const foundItem = !!(itemData?.foundInErp);
+      console.log("Item data received in frontend:", itemData);
+
+      const foundItem =
+        itemData &&
+        (itemData.serialNumber?.trim() ||
+          itemData.itemCode?.trim() ||
+          itemData.itemDescription?.trim() ||
+          itemData.categoryDescription?.trim() ||
+          itemData.itemCategory?.trim());
 
       // Populate form with API data
       setCurrentItem((prev) => ({
         ...prev,
-        serialNumber,
+        serialNumber: serialNumber,
         itemCode: itemData.itemCode || "",
         itemDescription: itemData.itemDescription || "",
         itemCategory: itemData.itemCategory || "",
@@ -432,16 +430,24 @@ const NewRequest = () => {
         returnable: prev.returnable || "No",
         images: prev.images || [],
         returnDate: prev.returnDate || "",
-        itemFound: foundItem,
+        itemFound: !!foundItem,
       }));
+
+      console.log("Current item after update:", {
+        serialNumber: serialNumber,
+        itemCode: itemData.itemCode,
+        itemDescription: itemData.itemDescription,
+        itemCategory: itemData.itemCategory,
+        categoryDescription: itemData.categoryDescription,
+      });
+
     } catch (error) {
       console.error("Error fetching item:", error);
-      // Serial not found in ERP — mark explicitly so 2 images become mandatory
-      setCurrentItem((prev) => ({
-        ...prev,
-        serialNumber,
-        itemFound: false,
-      }));
+      // Silently fail - user can fill manually
+      // Only show message if it's not a 404
+      if (error.response?.status !== 404) {
+        console.log("Item lookup failed, user can fill manually");
+      }
     } finally {
       setIsSearchingItem(false);
     }
@@ -466,10 +472,13 @@ const NewRequest = () => {
       return;
     }
 
-    // Validate images: mandatory 2 minimum only when serial NOT found in ERP
-    if (!currentItem.itemFound && currentItem.images.length < 2) {
+    // Validate images: minimum depends on serial lookup
+    const minImagesRequired = currentItem.itemFound ? 1 : 2;
+    if (currentItem.images.length < minImagesRequired) {
       showToast(
-        `Please upload at least 2 images for this item (serial number not found in ERP)`,
+        `Please upload at least ${minImagesRequired} image${
+          minImagesRequired > 1 ? "s" : ""
+        } for the item`,
         "warning",
       );
       return;
@@ -504,14 +513,13 @@ const NewRequest = () => {
       returnable: "No",
       returnDate: "",
       images: [],
-      itemFound: false,
     });
     setSerialNumberInput("");
-    setSerialNumberError(""); // clear stale error so it can't block future submit
     setShowItemForm(false);
   };
 
   const handleCancelEdit = () => {
+    // Reset the currentItem
     setCurrentItem({
       serialNumber: "",
       itemCode: "",
@@ -522,10 +530,8 @@ const NewRequest = () => {
       returnable: "No",
       returnDate: "",
       images: [],
-      itemFound: false,
     });
     setSerialNumberInput("");
-    setSerialNumberError("");
     setShowItemForm(false);
   };
   const removeItem = (id) => {
@@ -1925,17 +1931,14 @@ const NewRequest = () => {
                           const serialNumber = sanitizeSerialNumberInput(
                             e.target.value,
                           );
-                          // Clear all ERP-fetched fields immediately on every keystroke
                           setCurrentItem({
                             ...currentItem,
-                            serialNumber,
-                            itemCode: "",
-                            itemDescription: "",
-                            itemCategory: "",
-                            categoryDescription: "",
+                            serialNumber: serialNumber,
                             itemFound: false,
                           });
+                          // Validate in real-time while user types
                           setSerialNumberError(validateSerialNumber(serialNumber));
+                          // Auto-lookup after user stops typing (debounced)
                           if (serialNumber.trim()) {
                             clearTimeout(window.serialLookupTimeout);
                             window.serialLookupTimeout = setTimeout(() => {
@@ -2110,12 +2113,7 @@ const NewRequest = () => {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Item Images{" "}
-                        {currentItem.itemFound ? (
-                          <span className="text-gray-400 font-normal">(optional, max 5)</span>
-                        ) : (
-                          <span className="text-red-500">* (min 2 required, max 5)</span>
-                        )}
+                        Item Images ({currentItem.itemFound ? "1" : "2"}-5 required)
                       </label>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {currentItem.images.map((image, idx) => (
@@ -2156,16 +2154,6 @@ const NewRequest = () => {
                           </label>
                         )}
                       </div>
-                      {!currentItem.itemFound && currentItem.images.length < 2 && (
-                        <p className="mt-1 text-xs text-red-500">
-                          {2 - currentItem.images.length} more image{2 - currentItem.images.length > 1 ? "s" : ""} required — serial number not found in ERP
-                        </p>
-                      )}
-                      {currentItem.itemFound && (
-                        <p className="mt-1 text-xs text-green-600">
-                          ✓ Serial found in ERP — images are optional
-                        </p>
-                      )}
                     </div>
                   </div>
                   <div className="flex justify-end gap-4 mt-6">
