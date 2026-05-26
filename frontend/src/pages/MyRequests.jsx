@@ -762,13 +762,6 @@ const RequestDetailsModal = ({
         t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-",
       ]);
     }
-      // Draw horizontal line after each row
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width,
-        yPos + 8,
-      );
 
     if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
       transportRows.push([
