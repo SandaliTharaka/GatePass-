@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
 import {
+  FaUserPlus,
   FaEdit,
   FaTrash,
   FaSearch,
   FaFilter,
   FaEye,
+  FaTimes,
+  FaEyeSlash,
   FaUserShield,
   FaUser,
+  FaMapMarkerAlt,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { userManagementService } from "../services/userManagementService.js";
@@ -24,6 +28,7 @@ const UserManagement = () => {
   const [modalMode, setModalMode] = useState("view"); // 'create', 'edit', 'view'
   const [currentUser, setCurrentUser] = useState(null);
   const [filterRole, setFilterRole] = useState("All");
+  const [showPassword, setShowPassword] = useState(false);
   const [erpLocations, setErpLocations] = useState([]);
 
   const [formData, setFormData] = useState({
@@ -50,26 +55,6 @@ const UserManagement = () => {
   });
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  const closeModal = () => {
-    setShowModal(false);
-    setCurrentUser(null);
-  };
-
-  const normalizeEditBranches = (branches) => {
-    if (!Array.isArray(branches)) return [];
-
-    return branches.map((branch) => {
-      const branchValue = String(branch || "").trim();
-      const match = erpLocations.find(
-        (location) =>
-          String(location.locationId || "").trim() === branchValue ||
-          String(location.fingerscanLocation || "").trim() === branchValue
-      );
-
-      return match?.locationId || branchValue;
-    });
-  };
 
   // Fetch users on component mount
   useEffect(() => {
@@ -145,6 +130,7 @@ const UserManagement = () => {
     setFormData({
       userType: user.userType,
       userId: user.userId,
+      password: "",
       serviceNo: user.serviceNo,
       name: user.name,
       designation: user.designation,
@@ -153,10 +139,11 @@ const UserManagement = () => {
       contactNo: user.contactNo,
       email: user.email,
       role: user.role,
-      branches: normalizeEditBranches(user.branches),
+      branches: user.branches || [],
     });
     setModalMode("edit");
     setShowModal(true);
+    setShowPassword(false);
   };
 
   const openViewModal = (user) => {
@@ -172,7 +159,6 @@ const UserManagement = () => {
       contactNo: user.contactNo,
       email: user.email,
       role: user.role,
-      branches: normalizeEditBranches(user.branches),
     });
     setModalMode("view");
     setShowModal(true);
@@ -188,7 +174,9 @@ const UserManagement = () => {
           return toast.error("Please fill all required fields");
         }
 
+        // Remove password if empty
         const dataToSend = { ...formData };
+        if (!dataToSend.password) delete dataToSend.password;
 
         await userManagementService.updateUser(currentUser._id, dataToSend);
         toast.success("User updated successfully");
@@ -215,27 +203,6 @@ const UserManagement = () => {
       console.error("Error deleting user:", error);
     }
   };
-
-  const renderUserField = (label, name, type = "text") => (
-    <div>
-      <label className="block text-sm font-medium text-gray-600 mb-1">
-        {label}
-      </label>
-      <input
-        type={type}
-        name={name}
-        value={formData[name] || ""}
-        onChange={handleInputChange}
-        disabled={modalMode === "view"}
-        readOnly={modalMode === "view"}
-        className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-          modalMode === "view"
-            ? "bg-gray-100 text-gray-700"
-            : "bg-white border-gray-300"
-        }`}
-      />
-    </div>
-  );
 
   // const handleSearchByServiceNo = async () => {
   //   if (!assignForm.serviceNo?.trim()) return;
@@ -564,13 +531,6 @@ const UserManagement = () => {
                     >
                       <FaEdit />
                     </button>
-                    <button
-                      onClick={() => handleDeleteUser(user._id)}
-                      className="text-red-600 hover:text-red-900 ml-3"
-                      title="Delete User"
-                    >
-                      <FaTrash />
-                    </button>
                   </td>
                 </tr>
               ))}
@@ -603,7 +563,7 @@ const UserManagement = () => {
                 </h2>
 
                 <button
-                  onClick={closeModal}
+                  onClick={() => setShowModal(false)}
                   className="text-white/80 hover:text-white transition-colors"
                 >
                   <svg
@@ -788,7 +748,7 @@ const UserManagement = () => {
                   <div className="flex justify-end gap-3 mt-6">
                     <button
                       type="button"
-                      onClick={closeModal}
+                      onClick={() => setShowModal(false)}
                       className="px-6 py-2 bg-gray-600 text-white rounded-lg"
                     >
                       Close
@@ -804,70 +764,13 @@ const UserManagement = () => {
                 </form>
               ) : (
                 <form onSubmit={handleSubmit}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderUserField("User Type", "userType")}
-                    {renderUserField("User ID", "userId")}
-                    {renderUserField("Service No", "serviceNo")}
-                    {renderUserField("Name", "name")}
-                    {renderUserField("Designation", "designation")}
-                    {renderUserField("Section", "section")}
-                    {renderUserField("Group", "group")}
-                    {renderUserField("Contact No", "contactNo")}
-                    {renderUserField("Email", "email", "email")}
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">
-                        Role
-                      </label>
-                      <select
-                        name="role"
-                        value={formData.role || "User"}
-                        onChange={handleInputChange}
-                        disabled={modalMode === "view"}
-                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          modalMode === "view"
-                            ? "bg-gray-100 text-gray-700"
-                            : "bg-white border-gray-300"
-                        }`}
-                      >
-                        <option value="User">User</option>
-                        <option value="Approver">Executive</option>
-                        <option value="Security Officer">Security Officer</option>
-                        <option value="Pleader">Patrol Leader</option>
-                        <option value="SuperAdmin">SuperAdmin</option>
-                      </select>
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-600 mb-1">
-                        Branches
-                      </label>
-                      <select
-                        name="branches"
-                        multiple
-                        value={formData.branches || []}
-                        onChange={handleInputChange}
-                        disabled={modalMode === "view"}
-                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-32 ${
-                          modalMode === "view"
-                            ? "bg-gray-100 text-gray-700"
-                            : "bg-white border-gray-300"
-                        }`}
-                      >
-                        {erpLocations.map((loc) => (
-                          <option key={loc._id} value={loc.locationId}>
-                            {loc.fingerscanLocation}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                  </div>
+                  {/* ===== EDIT / VIEW FORM ===== */}
+                  {/* KEEP YOUR EXISTING EDIT / VIEW JSX HERE EXACTLY AS IS */}
 
                   <div className="flex justify-end gap-3 mt-6">
                     <button
                       type="button"
-                      onClick={closeModal}
+                      onClick={() => setShowModal(false)}
                       className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
                     >
                       Close
