@@ -39,10 +39,11 @@ const fetchItemBySerialNumber = async (req, res) => {
   } catch (error) {
     console.error("Error in fetchItemBySerialNumber:", error.message);
 
-    // Return 200 with found:false so frontend axios doesn't throw —
-    // "not found" is a valid business result, not an HTTP error
     if (error.message.includes("not found")) {
-      return res.status(200).json({ found: false, foundInErp: false });
+      return res.status(404).json({
+        message: error.message,
+        found: false,
+      });
     }
 
     res.status(500).json({
