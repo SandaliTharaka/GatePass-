@@ -703,29 +703,6 @@ const NewRequest = () => {
         return;
       }
 
-      const normalizedReceiverServiceNo = receiverServiceNo.trim();
-      const hasSLTReceiverDetails =
-        normalizedReceiverServiceNo &&
-        receiverDetails &&
-        String(receiverDetails.serviceNo || "").trim() ===
-          normalizedReceiverServiceNo;
-      const hasNonSLTReceiverDetails =
-        receiverNIC.trim() && receiverName.trim() && receiverContact.trim();
-
-      const receiverValidationError =
-        destinationType === "slt"
-          ? hasSLTReceiverDetails
-            ? ""
-            : "Receiver details are required"
-          : hasNonSLTReceiverDetails
-            ? ""
-            : "Receiver details are required";
-
-      if (receiverValidationError) {
-        showToast(receiverValidationError, "warning");
-        return;
-      }
-
       // Validation for destination type
       if (destinationType === "slt") {
         // SLT Branch validation - inLocation is required
