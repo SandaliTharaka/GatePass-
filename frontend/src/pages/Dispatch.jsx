@@ -53,7 +53,7 @@ import {
   FaUndo,
 } from "react-icons/fa";
 
-const generateitemDetailsPDF = (fullRequest) => {
+const generateItemDetailsPDFTemplate = async (fullRequest) => {
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -163,23 +163,164 @@ const generateitemDetailsPDF = (fullRequest) => {
     addHeader();
     let currentY = 84;
 
-    // Sender details
-    const senderInfo =
-      user ||
-      fullRequest.sender ||
+    const normalizePerson = (person, fallback = {}) => {
+      const source = person || {};
+      return {
+        name:
+          source.name ||
+          source.displayName ||
+          source.fullName ||
+          source.employeeName ||
+          source.userName ||
+          source.senderName ||
+          source.receiverName ||
+          `${source.employeeTitle || ""} ${source.employeeFirstName || ""} ${source.employeeSurname || ""}`.trim() ||
+          fallback.name ||
+          "-",
+        serviceNo:
+          source.serviceNo ||
+          source.employeeNo ||
+          source.employeeServiceNo ||
+          source.senderServiceNo ||
+          source.receiverServiceNo ||
+          source.employeeNumber ||
+          source.userId ||
+          fallback.serviceNo ||
+          "-",
+        designation:
+          source.designation ||
+          source.employeeDesignation ||
+          source.jobTitle ||
+          fallback.designation ||
+          "-",
+        section:
+          source.section ||
+          source.employeeSection ||
+          source.department ||
+          source.empSection ||
+          fallback.section ||
+          "-",
+        group:
+          source.group ||
+          source.employeeGroup ||
+          source.empGroup ||
+          source.officeLocation ||
+          fallback.group ||
+          "-",
+        contactNo:
+          source.contactNo ||
+          source.mobilePhone ||
+          source.mobileNo ||
+          source.phoneNumber ||
+          source.employeeMobilePhone ||
+          source.employeeOfficePhone ||
+          fallback.contactNo ||
+          "-",
+        nic: source.nic || source.employeeNic || source.nicNumber || fallback.nic || "-",
+        companyName: source.companyName || fallback.companyName || "-",
+        email: source.email || source.employeeOfficialEmail || fallback.email || "-",
+      };
+    };
+
+    const senderServiceNo =
+      fullRequest.senderDetails?.serviceNo ||
+      fullRequest.senderDetails?.employeeNo ||
+      fullRequest.requestDetails?.senderDetails?.serviceNo ||
+      fullRequest.requestDetails?.senderDetails?.employeeNo ||
+      fullRequest.requestDetails?.senderServiceNo ||
+      fullRequest.request?.senderServiceNo ||
+      fullRequest.requestDetails?.employeeServiceNo ||
+      fullRequest.employeeServiceNo ||
+      fullRequest.senderServiceNo;
+
+    const receiverServiceNo =
+      fullRequest.receiverDetails?.serviceNo ||
+      fullRequest.requestDetails?.receiverDetails?.serviceNo ||
+      fullRequest.requestDetails?.receiverDetails?.employeeNo ||
+      fullRequest.requestDetails?.receiverServiceNo ||
+      fullRequest.request?.receiverServiceNo ||
+      fullRequest.receiverServiceNo;
+
+    const senderFromRequest =
       fullRequest.senderDetails ||
-      fullRequest.user ||
       fullRequest.requestDetails?.senderDetails ||
       fullRequest.request?.senderDetails ||
+      fullRequest.sender ||
       {};
 
+    const receiverFromRequest =
+      fullRequest.receiverDetails ||
+      fullRequest.requestDetails?.receiverDetails ||
+      fullRequest.request?.receiverDetails ||
+      fullRequest.receiver ||
+      {};
+
+    let senderInfo = normalizePerson(senderFromRequest, {
+      serviceNo: senderServiceNo,
+    });
+    let receiverInfo = normalizePerson(receiverFromRequest, {
+      serviceNo: receiverServiceNo,
+    });
+
+    const senderLooksIncomplete =
+      senderInfo.name === "-" || senderInfo.name === "N/A" || senderInfo.serviceNo === "-";
+    const receiverLooksIncomplete =
+      receiverInfo.name === "-" || receiverInfo.name === "N/A" || receiverInfo.serviceNo === "-";
+
+    try {
+      if (senderLooksIncomplete && senderServiceNo) {
+        const fetchedSender = await getCachedUserAllowRefresh(
+          senderServiceNo,
+          searchUserByServiceNo,
+        );
+        senderInfo = normalizePerson(fetchedSender, { serviceNo: senderServiceNo });
+      }
+    } catch (error) {
+      console.warn("Sender lookup for PDF failed:", error);
+    }
+
+    try {
+      if (receiverLooksIncomplete && receiverServiceNo) {
+        const fetchedReceiver = await getCachedUserAllowRefresh(
+          receiverServiceNo,
+          searchReceiverByServiceNo,
+        );
+        receiverInfo = normalizePerson(fetchedReceiver, { serviceNo: receiverServiceNo });
+      }
+    } catch (error) {
+      console.warn("Receiver lookup for PDF failed:", error);
+    }
+
+    const statusDetails = fullRequest.statusDetails || fullRequest.requestDetails?.statusDetails || {};
+    const executiveOfficerData =
+      fullRequest.executiveOfficerData ||
+      fullRequest.requestDetails?.executiveOfficerData ||
+      {};
+    const verifyOfficerData =
+      fullRequest.verifyOfficerData ||
+      fullRequest.requestDetails?.verifyOfficerData ||
+      {};
+    const loadUserData = fullRequest.loadUserData || fullRequest.requestDetails?.loadUserData || {};
+    const loadingDetails =
+      fullRequest.loadingDetails ||
+      fullRequest.requestDetails?.loading ||
+      fullRequest.request?.loading ||
+      {};
+    const transporterInfo =
+      fullRequest.transporterDetails ||
+      fullRequest.transporterData ||
+      fullRequest.transportData ||
+      fullRequest.requestDetails?.transport ||
+      {};
+
+
     drawKeyValueBox("Sender Details", [
-      ["Name", senderInfo.name || senderInfo.displayName || "-"],
-      ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || senderInfo.senderServiceNo || fullRequest.senderServiceNo || "-"],
-      ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
-      ["Section", senderInfo.section || senderInfo.department || "-"],
-      ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
-      ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
+      ["Name", senderInfo.name],
+      ["Service No", senderInfo.serviceNo],
+      ["Designation", senderInfo.designation],
+      ["Section", senderInfo.section],
+      ["Group", senderInfo.group],
+      ["Contact", senderInfo.contactNo],
     ]);
 
     const formatDateValue = (dateValue) => {
@@ -310,40 +451,55 @@ const generateitemDetailsPDF = (fullRequest) => {
     const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
     const isNonSltDestination = fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
 
-    const recv =
-      fullRequest.receiver ||
-      fullRequest.receiverDetails ||
-      (typeof receiver !== "undefined" ? receiver : null) || {
-        name: requestCore.receiverName || fullRequest.receiverName || "-",
-        nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
-        contactNo: requestCore.receiverContact || fullRequest.receiverContact || "-",
-        serviceNo: requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
-        group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
-        companyName: requestCore.companyName || fullRequest.companyName || "-",
-        email: requestCore.receiverEmail || fullRequest.receiverEmail || "-",
-      };
+    const recv = receiverInfo;
 
     if (isNonSltDestination) {
-      drawKeyValueBox("Receiver Details", [
-        ["Name", recv.name || requestCore.receiverName || "-"],
+      drawKeyValueBox("Receiver Details - Non-SLT Employee", [
+        ["Name", recv.name],
         [
           "Company",
           fullRequest.companyName || requestCore.companyName || recv.companyName || "-",
         ],
-        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+        ["Contact", recv.contactNo],
         ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
       ]);
     } else {
-      drawKeyValueBox("Receiver Details", [
-        ["Name", recv.name || requestCore.receiverName || "-"],
+      drawKeyValueBox("Receiver Details - SLT Employee", [
+        ["Name", recv.name],
         [
           "Service No",
-          recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+          recv.serviceNo,
         ],
-        ["Group", recv.group || requestCore.receiverGroup || "-"],
-        ["Section", recv.section || requestCore.receiverSection || "-"],
-        ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
-        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+        ["Group", recv.group],
+        ["Section", recv.section],
+        ["Designation", recv.designation],
+        ["Contact", recv.contactNo],
+      ]);
+    }
+
+    if (Object.keys(executiveOfficerData).length || statusDetails.executiveOfficerStatus || statusDetails.executiveOfficerComment) {
+      drawKeyValueBox("Executive Officer Details", [
+        ["Name", executiveOfficerData.name || statusDetails.executiveOfficerName || "-"],
+        ["Service No", executiveOfficerData.serviceNo || statusDetails.executiveOfficerServiceNo || "-"],
+        ["Section", executiveOfficerData.section || "-"],
+        ["Group", executiveOfficerData.group || "-"],
+        ["Designation", executiveOfficerData.designation || "-"],
+        ["Contact", executiveOfficerData.contactNo || "-"],
+        ["Status", statusDetails.executiveOfficerStatus ?? "-"],
+        ["Comment", statusDetails.executiveOfficerComment || "-"],
+      ]);
+    }
+
+    if (Object.keys(verifyOfficerData).length || statusDetails.verifyOfficerStatus || statusDetails.verifyOfficerComment) {
+      drawKeyValueBox("Verify Officer Details", [
+        ["Name", verifyOfficerData.name || statusDetails.verifyOfficerName || "-"],
+        ["Service No", verifyOfficerData.serviceNo || statusDetails.verifyOfficerServiceNo || statusDetails.verifyOfficerServiceNumber || "-"],
+        ["Section", verifyOfficerData.section || "-"],
+        ["Group", verifyOfficerData.group || "-"],
+        ["Designation", verifyOfficerData.designation || "-"],
+        ["Contact", verifyOfficerData.contactNo || "-"],
+        ["Status", statusDetails.verifyOfficerStatus ?? "-"],
+        ["Comment", statusDetails.verifyOfficerComment || "-"],
       ]);
     }
 
@@ -352,6 +508,7 @@ const generateitemDetailsPDF = (fullRequest) => {
       fullRequest.transportData ||
       requestCore.transport ||
       requestCore.transportData ||
+      transporterInfo ||
       {};
 
     const transportRows = [
@@ -366,24 +523,25 @@ const generateitemDetailsPDF = (fullRequest) => {
       ]);
       transportRows.push([
         "Name",
-        (typeof transporterDetails !== "undefined" ? transporterDetails?.name : null) || t.transporterName || requestCore.transporterName || "-",
+        transporterInfo.name || t.transporterName || requestCore.transporterName || "-",
       ]);
       transportRows.push([
         "Section",
-        (typeof transporterDetails !== "undefined" ? transporterDetails?.section : null) || t.transporterSection || requestCore.transporterSection || "-",
+        transporterInfo.section || t.transporterSection || requestCore.transporterSection || "-",
       ]);
       transportRows.push([
         "Group",
-        (typeof transporterDetails !== "undefined" ? transporterDetails?.group : null) || t.transporterGroup || requestCore.transporterGroup || "-",
+        transporterInfo.group || t.transporterGroup || requestCore.transporterGroup || "-",
       ]);
       transportRows.push([
         "Designation",
-        (typeof transporterDetails !== "undefined" ? transporterDetails?.designation : null) || t.transporterDesignation || requestCore.transporterDesignation || "-",
+        transporterInfo.designation || t.transporterDesignation || requestCore.transporterDesignation || "-",
       ]);
       transportRows.push([
         "Contact",
-        (typeof transporterDetails !== "undefined" ? transporterDetails?.contactNo : null) || t.transporterContact || requestCore.transporterContact || "-",
+        transporterInfo.contactNo || t.transporterContact || requestCore.transporterContact || "-",
       ]);
+      drawKeyValueBox("Transport Details - SLT Employee", transportRows);
     } else {
       transportRows.push([
         "Name",
@@ -401,6 +559,7 @@ const generateitemDetailsPDF = (fullRequest) => {
         "Email",
         t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-",
       ]);
+      drawKeyValueBox("Transport Details - Non-SLT Employee", transportRows);
     }
 
     if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
@@ -414,7 +573,30 @@ const generateitemDetailsPDF = (fullRequest) => {
       ]);
     }
 
-    drawKeyValueBox("Transport Details", transportRows);
+    if (loadingDetails && Object.keys(loadingDetails).length) {
+      const loadingRows = [
+        ["Loading Location", loadingDetails.loadingLocation || "-"],
+        ["Loading Time", loadingDetails.loadingTime ? new Date(loadingDetails.loadingTime).toLocaleString() : "-"],
+        ["Staff Type", loadingDetails.staffType || "-"],
+      ];
+
+      if (String(loadingDetails.staffType || "").toUpperCase() === "SLT") {
+        loadingRows.push(["Staff Service No", loadingDetails.staffServiceNo || "-"]);
+        loadingRows.push(["Name", loadUserData.name || "-"]);
+        loadingRows.push(["Section", loadUserData.section || "-"]);
+        loadingRows.push(["Group", loadUserData.group || "-"]);
+        loadingRows.push(["Designation", loadUserData.designation || "-"]);
+        loadingRows.push(["Contact", loadUserData.contactNo || "-"]);
+        drawKeyValueBox("Loading Details - SLT Employee", loadingRows);
+      } else {
+        loadingRows.push(["Staff Name", loadingDetails.nonSLTStaffName || "-"]);
+        loadingRows.push(["Company", loadingDetails.nonSLTStaffCompany || "-"]);
+        loadingRows.push(["NIC", loadingDetails.nonSLTStaffNIC || "-"]);
+        loadingRows.push(["Contact", loadingDetails.nonSLTStaffContact || "-"]);
+        loadingRows.push(["Email", loadingDetails.nonSLTStaffEmail || "-"]);
+        drawKeyValueBox("Loading Details - Non-SLT Employee", loadingRows);
+      }
+    }
 
     const pageCount = doc.getNumberOfPages();
     for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
@@ -428,8 +610,22 @@ const generateitemDetailsPDF = (fullRequest) => {
       doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, { align: "right" });
     }
 
-    const safeRef = fullRequest.referenceNumber || fullRequest.refNo || fullRequest.ref || "gatepass";
-    doc.save(`SLT_GatePass_${safeRef}.pdf`);
+    try {
+      const safeRef = fullRequest.referenceNumber || fullRequest.refNo || fullRequest.ref || "gatepass";
+      // Use blob download to be more robust across browsers
+      const pdfBlob = doc.output("blob");
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `SLT_GatePass_${safeRef}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF generation/download failed:", err);
+      alert("Failed to generate PDF. Check console for details.");
+    }
   };
 
 // Helper function to detect Non-SLT identifiers
@@ -2558,167 +2754,20 @@ const RequestDetailsModal = ({
     };
   };
 
-  const generateitemDetailsPDF = (items, refNo) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-
-    try {
-      doc.addImage(logoUrl, "PNG", margin, 10, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
+  // Wrapper that normalizes inputs and delegates to the template PDF generator
+  const generateitemDetailsPDF = async (itemsOrRequest, refNo) => {
+    let fullRequest = itemsOrRequest;
+    if (!fullRequest) {
+      fullRequest = { items: [], refNo: refNo };
+    } else if (Array.isArray(itemsOrRequest)) {
+      fullRequest = { items: itemsOrRequest, refNo: refNo };
     }
-
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 153);
-    doc.text("SLT Gate Pass - item Details", pageWidth / 2, 20, {
-      align: "center",
-    });
-
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Reference: ${request.refNo}`, pageWidth / 2, 30, {
-      align: "center",
-    });
-
-    const currentDate = new Date().toLocaleDateString();
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${currentDate}`, pageWidth - margin, 20, {
-      align: "right",
-    });
-
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, 35, pageWidth - margin, 35);
-
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text("item Details", margin, 45);
-
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.setDrawColor(200, 200, 200);
-
-    const col1Width = 60;
-    const col2Width = 40;
-    const col3Width = 30;
-    const col4Width = 20;
-    const col5Width = 30;
-
-    doc.setFillColor(240, 240, 240);
-    doc.rect(
-      margin,
-      yPos,
-      col1Width + col2Width + col3Width + col4Width + col5Width,
-      8,
-      "F",
-    );
-
-    doc.text("item", margin + 3, yPos + 5.5);
-    doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-    doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-    doc.text("Qty", margin + col1Width + col2Width + col3Width + 3, yPos + 5.5);
-    doc.text(
-      "Item Code",
-      margin + col1Width + col2Width + col3Width + col4Width + 3,
-      yPos + 5.5,
-    );
-
-    yPos += 8;
-
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
-        doc.setFillColor(240, 240, 240);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-        doc.text("item", margin + 3, yPos + 5.5);
-        doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-        doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-        doc.text(
-          "Qty",
-          margin + col1Width + col2Width + col3Width + 3,
-          yPos + 5.5,
-        );
-        doc.text(
-          "Item Code",
-          margin + col1Width + col2Width + col3Width + col4Width + 3,
-          yPos + 5.5,
-        );
-        yPos += 8;
-      }
-
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 248, 248);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-      }
-
-      const truncateText = (text, maxLength) => {
-        if (!text) return "N/A";
-        return text.length > maxLength
-          ? text.substring(0, maxLength) + "..."
-          : text;
-      };
-
-      doc.text(
-        truncateText(item?.itemDescription || "N/A", 25),
-        margin + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.serialNumber || "N/A", 15),
-        margin + col1Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.categoryDescription || "N/A", 12),
-        margin + col1Width + col2Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        item?.itemQuantity?.toString() || "1",
-        margin + col1Width + col2Width + col3Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.itemCode || "N/A", 15),
-        margin + col1Width + col2Width + col3Width + col4Width + 3,
-        yPos + 5.5,
-      );
-
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width + col5Width,
-        yPos + 8,
-      );
-
-      yPos += 8;
-    });
-
-    const footerYPos = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      "This is an electronically generated document and does not require signature.",
-      pageWidth / 2,
-      footerYPos,
-      { align: "center" },
-    );
-
-    doc.save(`SLT_GatePass_DESCRIPTIONs_${request.refNo}.pdf`);
+    try {
+      await generateItemDetailsPDFTemplate(fullRequest);
+    } catch (err) {
+      console.error("Failed to generate PDF:", err);
+      alert("Failed to generate PDF. Please try again.");
+    }
   };
 
   return (
