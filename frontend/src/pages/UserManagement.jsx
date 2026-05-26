@@ -34,7 +34,6 @@ const UserManagement = () => {
   const [formData, setFormData] = useState({
     userType: "SLT",
     userId: "",
-    password: "",
     serviceNo: "",
     name: "",
     designation: "",
@@ -43,7 +42,6 @@ const UserManagement = () => {
     contactNo: "",
     email: "",
     role: "User",
-    branches: [],
   });
 
   // Assign Role state (NEW)
@@ -130,7 +128,6 @@ const UserManagement = () => {
     setFormData({
       userType: user.userType,
       userId: user.userId,
-      password: "",
       serviceNo: user.serviceNo,
       name: user.name,
       designation: user.designation,
@@ -139,7 +136,6 @@ const UserManagement = () => {
       contactNo: user.contactNo,
       email: user.email,
       role: user.role,
-      branches: user.branches || [],
     });
     setModalMode("edit");
     setShowModal(true);
@@ -765,7 +761,147 @@ const UserManagement = () => {
               ) : (
                 <form onSubmit={handleSubmit}>
                   {/* ===== EDIT / VIEW FORM ===== */}
-                  {/* KEEP YOUR EXISTING EDIT / VIEW JSX HERE EXACTLY AS IS */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        User Type
+                      </label>
+                      <input
+                        name="userType"
+                        value={formData.userType || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        User ID
+                      </label>
+                      <input
+                        name="userId"
+                        value={formData.userId || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Service No
+                      </label>
+                      <input
+                        name="serviceNo"
+                        value={formData.serviceNo || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Role
+                      </label>
+                      <select
+                        name="role"
+                        value={formData.role || "User"}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      >
+                        <option value="User">User</option>
+                        <option value="Approver">Executive</option>
+                        <option value="Verifier">Verifier</option>
+                        <option value="Dispatcher">Dispatcher</option>
+                        <option value="Pleader">Patrol Leader</option>
+                        <option value="Admin">Admin</option>
+                        <option value="SuperAdmin">SuperAdmin</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Name
+                      </label>
+                      <input
+                        name="name"
+                        value={formData.name || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Designation
+                      </label>
+                      <input
+                        name="designation"
+                        value={formData.designation || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Section
+                      </label>
+                      <input
+                        name="section"
+                        value={formData.section || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Group
+                      </label>
+                      <input
+                        name="group"
+                        value={formData.group || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Contact No
+                      </label>
+                      <input
+                        name="contactNo"
+                        value={formData.contactNo || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        name="email"
+                        type="email"
+                        value={formData.email || ""}
+                        onChange={handleInputChange}
+                        disabled={modalMode === "view"}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </div>
+
+                  </div>
 
                   <div className="flex justify-end gap-3 mt-6">
                     <button
