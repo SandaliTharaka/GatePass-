@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   getPendingStatuses,
   getApprovedStatuses,
@@ -65,6 +65,7 @@ import {
   FaUndo,
 } from "react-icons/fa";
 
+// PDF helpers (restored to local implementation)
 // Helper function to detect Non-SLT identifiers
 const isNonSltIdentifier = (serviceNo) => {
   if (!serviceNo) return false;
@@ -90,6 +91,57 @@ const ensureReceiverDetails = (receiverDetails, receiverServiceNo, request) => {
       "N/A",
   };
 };
+
+const buildTransportPdfRows = (transport = {}, transporterDetails = null) => {
+  const rows = [
+    ["Method", transport.transportMethod || "N/A"],
+    ["Type", transport.transporterType || "N/A"],
+  ];
+
+  const hasEmployeeDetails =
+    transporterDetails &&
+    (transporterDetails.name ||
+      transporterDetails.serviceNo ||
+      transporterDetails.designation ||
+      transporterDetails.section ||
+      transporterDetails.group ||
+      transporterDetails.contactNo);
+
+  if (String(transport.transporterType || "").toUpperCase() === "SLT") {
+    rows.push(["Transporter", transporterDetails?.name || transport.transporterName || "N/A"]);
+    rows.push(["Service No", transporterDetails?.serviceNo || transport.transporterServiceNo || "N/A"]);
+    rows.push(["Designation", transporterDetails?.designation || transport.transporterDesignation || "N/A"]);
+    rows.push(["Section", transporterDetails?.section || transport.transporterSection || "N/A"]);
+    rows.push(["Group", transporterDetails?.group || transport.transporterGroup || "N/A"]);
+    rows.push(["Contact", transporterDetails?.contactNo || transport.transporterContact || "N/A"]);
+  } else if (
+    String(transport.transporterType || "").toUpperCase() === "NON-SLT" ||
+    transport.nonSLTTransporterName ||
+    transport.nonSLTTransporterNIC ||
+    transport.nonSLTTransporterPhone ||
+    transport.nonSLTTransporterEmail
+  ) {
+    rows.push(["Transporter", transport.nonSLTTransporterName || "N/A"]);
+    rows.push(["NIC", transport.nonSLTTransporterNIC || "N/A"]);
+    rows.push(["Phone", transport.nonSLTTransporterPhone || "N/A"]);
+    rows.push(["Email", transport.nonSLTTransporterEmail || "N/A"]);
+  } else if (hasEmployeeDetails) {
+    rows.push(["Transporter", transporterDetails?.name || "N/A"]);
+    rows.push(["Service No", transporterDetails?.serviceNo || "N/A"]);
+    rows.push(["Designation", transporterDetails?.designation || "N/A"]);
+    rows.push(["Section", transporterDetails?.section || "N/A"]);
+    rows.push(["Group", transporterDetails?.group || "N/A"]);
+    rows.push(["Contact", transporterDetails?.contactNo || "N/A"]);
+  }
+
+  if (String(transport.transportMethod || "").toLowerCase() === "vehicle") {
+    rows.push(["Vehicle No", transport.vehicleNumber || "N/A"]);
+    rows.push(["Vehicle Model", transport.vehicleModel || "N/A"]);
+  }
+
+  return rows;
+};
+
 
 const mapErpEmployeeToReceiver = (employee, fallbackServiceNo) => {
   if (!employee) return null;
@@ -141,29 +193,13 @@ const fetchOfficerData = async (status) => {
   let executiveOfficerData = null;
   let verifyOfficerData = null;
 
-  if (execServiceNo) {
-    try {
-      executiveOfficerData = await getCachedUser(
-        execServiceNo,
-        searchUserByServiceNo,
-      );
-    } catch {}
-  }
-
-  if (verifyServiceNo) {
-    try {
-      verifyOfficerData = await getCachedUser(
-        verifyServiceNo,
-        searchUserByServiceNo,
-      );
-    } catch {}
-  }
-
   return { executiveOfficerData, verifyOfficerData };
 };
 
-// PDF Generator function for Petrol Leader (moved to module level for accessibility)
-const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
+// PDF Generator function for Petrol Leader (restored local implementation)
+// Accepts options: { openInNewWindow: boolean, autoPrint: boolean }
+const generateDESCRIPTIONDetailsPDF = (fullRequest, options = {}) => {
+  const { openInNewWindow = false, autoPrint = false } = options;
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -183,9 +219,7 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   const addHeader = () => {
     try {
       doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
-    } catch (e) {
-      // ignore logo rendering issues
-    }
+    } catch (e) {}
 
     doc.setDrawColor(...palette.navy);
     doc.setLineWidth(1.1);
@@ -193,21 +227,15 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
 
     doc.setFontSize(17);
     doc.setTextColor(...palette.navy);
-    doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
-      align: "center",
-    });
+    doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, { align: "center" });
 
     doc.setFontSize(9);
     doc.setTextColor(...palette.slate);
-    doc.text("Official Item Movement Record", pageWidth / 2, 46, {
-      align: "center",
-    });
+    doc.text("Official Item Movement Record", pageWidth / 2, 46, { align: "center" });
 
     doc.setFontSize(9);
     doc.setTextColor(...palette.slate);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
-      align: "right",
-    });
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, { align: "right" });
 
     doc.setFontSize(10);
     doc.setTextColor(...palette.text);
@@ -281,9 +309,10 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   };
 
   const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
+  const transport = requestCore.transport || fullRequest.transportData || fullRequest.transport || {};
+  const transporterDetails = fullRequest.transporterDetails && typeof fullRequest.transporterDetails === "object" ? fullRequest.transporterDetails : null;
   const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
-  const senderInfo =
-    fullRequest.senderDetails || fullRequest.sender || requestCore.senderDetails || {};
+  const senderInfo = fullRequest.senderDetails || fullRequest.sender || requestCore.senderDetails || {};
 
   drawKeyValueBox("Sender Details", [
     ["Name", senderInfo.name || senderInfo.displayName || "-"],
@@ -450,6 +479,8 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
     ]);
   }
 
+  drawKeyValueBox("Transport Details", buildTransportPdfRows(transport, transporterDetails));
+
   const pageCount = doc.getNumberOfPages();
   for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
     doc.setPage(pageNo);
@@ -463,7 +494,23 @@ const generateDESCRIPTIONDetailsPDF = (fullRequest) => {
   }
 
   const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
-  doc.save(`SLT_GatePass_${safeRef}.pdf`);
+  if (openInNewWindow && typeof window !== "undefined") {
+    try {
+      const blob = doc.output("blob");
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url);
+      if (w && autoPrint) {
+        w.addEventListener("load", () => {
+          try { w.print(); } catch (e) {}
+        });
+      }
+    } catch (e) {
+      console.error("Failed to open PDF in new window:", e);
+      doc.save(`SLT_GatePass_${safeRef}.pdf`);
+    }
+  } else {
+    doc.save(`SLT_GatePass_${safeRef}.pdf`);
+  }
 };
 
 const Verify = () => {
@@ -477,8 +524,6 @@ const Verify = () => {
   const [transportData, setTransportData] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const isRejectingRef = useRef(false);
   const { showToast } = useToast();
   const location = useLocation();
 
@@ -2076,16 +2121,11 @@ const Verify = () => {
   };
 
   const handleReject = async (item) => {
-    if (isRejectingRef.current) return;
-
     try {
       if (!comment || comment.trim() === "") {
         showToast("Comment is required to reject the item.", "warning");
         return;
       }
-      isRejectingRef.current = true;
-      setIsRejecting(true);
-
       // Call API to reject status with comment
       const updatedStatus = await rejectStatus(item.refNo, comment);
 
@@ -2120,9 +2160,6 @@ const Verify = () => {
       setComment("");
     } catch (error) {
       console.error("Error rejecting status:", error.message);
-    } finally {
-      isRejectingRef.current = false;
-      setIsRejecting(false);
     }
   };
 
@@ -2643,7 +2680,6 @@ const Verify = () => {
         comment={comment}
         handleApprove={handleApprove}
         handleReject={handleReject}
-        isRejecting={isRejecting}
         setComment={setComment}
         transporterDetails={transportData}
         setStaffType={setStaffType}
@@ -2678,7 +2714,6 @@ const RequestDetailsModal = ({
   setComment,
   handleApprove,
   handleReject,
-  isRejecting,
   transporterDetails,
   setStaffType,
   setServiceId,
@@ -3033,603 +3068,16 @@ const RequestDetailsModal = ({
   };
 
   const printReport = (request, transporterDetails, loadingStaff) => {
-    // Create a temporary iframe to hold the printable content
-    const printFrame = document.createElement("iframe");
-    printFrame.style.position = "absolute";
-    printFrame.style.top = "-9999px";
-    document.body.appendChild(printFrame);
+    // Ensure transporter / loading info is present on the object passed to the PDF generator
+    const fullRequest = { ...(request || {}) };
+    if (transporterDetails) fullRequest.transporterDetails = transporterDetails;
+    if (!fullRequest.transportData && fullRequest.requestDetails?.transport) {
+      fullRequest.transportData = fullRequest.requestDetails.transport;
+    }
+    if (loadingStaff) fullRequest.loadUserData = fullRequest.loadUserData || loadingStaff;
 
-    const contentDocument = printFrame.contentDocument;
-
-    // Create the print content with styling
-    contentDocument.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>SLT Gate Pass - ${request.refNo}</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              margin: 20px;
-              color: #333;
-            }
-            .header {
-              text-align: center;
-              margin-bottom: 20px;
-              padding-bottom: 10px;
-              border-bottom: 1px solid #eee;
-            }
-            .logo {
-              max-height: 60px;
-              margin-bottom: 10px;
-            }
-            .title {
-              font-size: 24px;
-              color: #003399;
-              margin: 0;
-            }
-            .ref {
-              font-size: 14px;
-              color: #666;
-              margin: 5px 0;
-            }
-            .date {
-              font-size: 12px;
-              color: #888;
-              margin: 5px 0 15px;
-            }
-            .section {
-              margin-bottom: 20px;
-            }
-            .section-title {
-              font-size: 16px;
-              font-weight: bold;
-              margin-bottom: 10px;
-              padding-bottom: 5px;
-              border-bottom: 1px solid #eee;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 15px;
-            }
-            .item {
-              margin-bottom: 5px;
-            }
-            .itemComm{
-              margin-bottom: 40px;
-            }
-            .label {
-              font-weight: bold;
-              color: #555;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 15px 0;
-            }
-            th, td {
-              padding: 8px;
-              text-align: left;
-              border-bottom: 1px solid #ddd;
-            }
-            th {
-              background-color: #f5f5f5;
-              font-weight: bold;
-            }
-            .signature-section {
-              display: grid;
-              grid-template-columns: 1fr 1fr 1fr;
-              gap: 20px;
-              margin-top: 40px;
-            }
-            .signature-box {
-              height: 70px;
-              border-bottom: 1px solid #ccc;
-            }
-            .signature-title {
-              text-align: center;
-              font-weight: bold;
-              margin-top: 5px;
-            }
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              font-size: 10px;
-              color: #999;
-            }
-            @media print {
-              body {
-                margin: 0;
-                padding: 15px;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <img src=${logoUrl} alt="SLT Logo" class="logo" />
-            <h1 class="title">SLT Gate Pass</h1>
-            <p class="ref">Reference: ${request.refNo}</p>
-            <p class="date">Generated on: ${new Date().toLocaleDateString()}</p>
-          </div>
-          
-          <div class="section">
-            <h2 class="section-title">Sender Details</h2>
-            <div class="grid">
-              <div class="item">
-                <span class="label">Name:</span> ${
-                  request?.senderDetails?.name || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Service No:</span> ${
-                  request?.senderDetails?.serviceNo ||
-                  request?.requestDetails?.employeeServiceNo ||
-                  request?.request?.employeeServiceNo ||
-                  "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Section:</span> ${
-                  request?.senderDetails?.section || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Group:</span> ${
-                  request?.senderDetails?.group || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Designation:</span> ${
-                  request?.senderDetails?.designation || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Contact:</span> ${
-                  request?.senderDetails?.contactNo || "N/A"
-                }
-              </div>
-            </div>
-          </div>
-
-          <div class="section">
-            <h2 class="section-title">Receiver Details</h2>
-            <div class="grid">
-              ${
-                request?.isNonSltPlace ||
-                request?.requestDetails?.isNonSltPlace ||
-                request?.request?.isNonSltPlace
-                  ? `
-                  <div class="item">
-                    <span class="label">Name:</span> ${
-                      request?.receiverName ||
-                      request?.requestDetails?.receiverName ||
-                      request?.request?.receiverName ||
-                      "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">NIC:</span> ${
-                      request?.receiverNIC ||
-                      request?.requestDetails?.receiverNIC ||
-                      request?.request?.receiverNIC ||
-                      "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">Contact:</span> ${
-                      request?.receiverContact ||
-                      request?.requestDetails?.receiverContact ||
-                      request?.request?.receiverContact ||
-                      "N/A"
-                    }
-                  </div>
-                `
-                  : `
-                  <div class="item">
-                    <span class="label">Name:</span> ${
-                      request?.receiverDetails?.name || "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">Service No:</span> ${
-                      request?.receiverDetails?.serviceNo || "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">Section:</span> ${
-                      request?.receiverDetails?.section || "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">Group:</span> ${
-                      request?.receiverDetails?.group || "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">Designation:</span> ${
-                      request?.receiverDetails?.designation || "N/A"
-                    }
-                  </div>
-                  <div class="item">
-                    <span class="label">Contact:</span> ${
-                      request?.receiverDetails?.contactNo || "N/A"
-                    }
-                  </div>
-                `
-              }
-            </div>
-          </div>
-          
-          <div class="section">
-            <h2 class="section-title">Location Details</h2>
-            <div class="grid">
-              <div class="item">
-                <span class="label">From:</span> ${
-                  request?.outLocation ||
-                  request?.requestDetails?.outLocation ||
-                  request?.request?.outLocation ||
-                  "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">To:</span> ${
-                  request?.inLocation ||
-                  request?.requestDetails?.inLocation ||
-                  request?.request?.inLocation ||
-                  "N/A"
-                }
-              </div>
-              ${
-                request?.isNonSltPlace ||
-                request?.requestDetails?.isNonSltPlace ||
-                request?.request?.isNonSltPlace
-                  ? `
-                  <div class="item">
-                    <span class="label">Company:</span> ${
-                      request?.companyName ||
-                      request?.requestDetails?.companyName ||
-                      request?.request?.companyName ||
-                      "N/A"
-                    }
-                  </div>
-                  <div class="item" style="grid-column: 1 / -1;">
-                    <span class="label">Address:</span> ${
-                      request?.companyAddress ||
-                      request?.requestDetails?.companyAddress ||
-                      request?.request?.companyAddress ||
-                      "N/A"
-                    }
-                  </div>
-                `
-                  : ""
-              }
-            </div>
-          </div>
-          
-          <div class="section">
-            <h2 class="section-title">Transport Details</h2>
-            <div class="grid">
-              <div class="item">
-                <span class="label">Method:</span> ${
-                  request?.transportData?.transportMethod || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Type:</span> ${
-                  request?.transportData?.transporterType || "N/A"
-                }
-              </div>
-              ${
-                request?.transportData?.transporterType === "SLT"
-                  ? `
-                
-              <div class="item">
-                <span class="label">Transporter:</span> ${
-                  transporterDetails?.name || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Service No:</span> ${
-                  transporterDetails?.serviceNo || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Contact:</span> ${
-                  transporterDetails?.contactNo || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Section:</span> ${
-                  transporterDetails?.section || "N/A"
-                }
-              </div>
-              
-              ${
-                request?.transportData?.transportMethod === "Vehicle"
-                  ? `
-              <div class="item">
-                <span class="label">Vehicle No:</span> ${
-                  request?.requestDetails?.vehicleNumber || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Vehicle Item Code:</span> ${
-                  request?.requestDetails?.vehicleModel || "N/A"
-                }
-              </div>
-              `
-                  : ""
-              } 
-              `
-                  : `
-              <div class="item">
-                <span class="label">Transporter:</span> ${
-                  request?.transportData?.nonSLTTransporterName || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Service No:</span> ${
-                  request?.transportData?.nonSLTTransporterEmail || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Contact:</span> ${
-                  request?.transportData?.nonSLTTransporterNIC || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Section:</span> ${
-                  request?.transportData?.nonSLTTransporterPhone || "N/A"
-                }
-              </div>
-              
-              ${
-                request?.transportData?.transportMethod === "Vehicle"
-                  ? `
-              <div class="item">
-                <span class="label">Vehicle No:</span> ${
-                  request?.requestDetails?.vehicleNumber || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Vehicle Item Code:</span> ${
-                  request?.requestDetails?.vehicleModel || "N/A"
-                }
-              </div>
-              `
-                  : ""
-              }
-              `
-              }
-            </div>
-          </div>
-
-          <div class="section">
-            <h2 class="section-title">Exerctive Officer Details</h2>
-            <div class="grid">
-              <div class="item">
-                <span class="label">Name:</span> ${
-                  request.executiveOfficerData?.name || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Service No:</span> ${
-                  request.executiveOfficerData?.serviceNo || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Section:</span> ${
-                  request.executiveOfficerData?.section || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Group:</span> ${
-                  request.executiveOfficerData?.group || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Designation:</span> ${
-                  request.executiveOfficerData?.designation || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Contact:</span> ${
-                  request.executiveOfficerData?.contactNo || "N/A"
-                }
-              </div>
-              <div class="itemComm">
-                <span class="label">Exerctive Officer Comment:</span> ${
-                  request.statusDetails?.executiveOfficerComment || "N/A"
-                }
-              </div>
-            </div>
-          </div>
-
-          <div class="section">
-            <h2 class="section-title">Verify Officer Details</h2>
-            <div class="grid">
-              <div class="item">
-                <span class="label">Name:</span> ${
-                  request.verifyOfficerData?.name || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Service No:</span> ${
-                  request.verifyOfficerData?.serviceNo || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Section:</span> ${
-                  request.verifyOfficerData?.section || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Group:</span> ${
-                  request.verifyOfficerData?.group || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Designation:</span> ${
-                  request.verifyOfficerData?.designation || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Contact:</span> ${
-                  request.verifyOfficerData?.contactNo || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Verify Officer Comment:</span> ${
-                  request.statusDetails?.verifyOfficerComment || "N/A"
-                }
-              </div>
-            </div>
-          </div>
-          
-          <!-- Loading Details Section -->
-      <div class="section">
-        <h2 class="section-title">Loading Details</h2>
-        <div class="grid">
-          <div class="item">
-            <span class="label">Loading Location:</span> ${
-              request?.requestDetails?.loading?.loadingLocation || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Loading Time:</span> ${
-              request?.requestDetails?.loading?.loadingTime
-                ? new Date(
-                    request.requestDetails.loading.loadingTime,
-                  ).toLocaleString()
-                : "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Staff Type:</span> ${
-              request?.requestDetails?.loading?.staffType || "N/A"
-            }
-          </div>
-          
-          ${
-            request?.requestDetails?.loading?.staffType === "SLT"
-              ? `
-            <div class="item">
-              <span class="label">Staff Service No:</span> ${
-                request?.requestDetails?.loading?.staffServiceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-                <span class="label">Name:</span> ${
-                  request.loadUserData?.name || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Service No:</span> ${
-                  request.loadUserData?.serviceNo || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Section:</span> ${
-                  request.loadUserData?.section || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Group:</span> ${
-                  request.loadUserData?.group || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Designation:</span> ${
-                  request.loadUserData?.designation || "N/A"
-                }
-              </div>
-              <div class="item">
-                <span class="label">Contact:</span> ${
-                  request.loadUserData?.contactNo || "N/A"
-                }
-              </div>
-          `
-              : `
-            <div class="item">
-              <span class="label">Staff Name:</span> ${
-                request?.requestDetails?.loading?.nonSLTStaffName || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Company:</span> ${
-                request?.requestDetails?.loading?.nonSLTStaffCompany || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">NIC:</span> ${
-                request?.requestDetails?.loading?.nonSLTStaffNIC || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request?.requestDetails?.loading?.nonSLTStaffContact || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Email:</span> ${
-                request?.requestDetails?.loading?.nonSLTStaffEmail || "N/A"
-              }
-            </div>
-          `
-          }
-        </div>
-      </div>
-
-          <div class="section">
-            <h2 class="section-title">items</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>item Name</th>
-                  <th>Serial Number</th>
-                  <th>Category</th>
-                  <th>Item Code</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${request.items
-                  .map(
-                    (item) => `
-                  <tr>
-                    <td>${item?.itemDescription || "-"}</td>
-                    <td>${item?.serialNumber || "-"}</td>
-                    <td>${item?.categoryDescription || "-"}</td>
-                    <td>${item?.itemCode || "-"}</td>
-                    
-                  </tr>
-                `,
-                  )
-                  .join("")}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="footer">
-            This is an electronically generated document and does not require signature.
-          </div>
-        </body>
-        </html>
-      `);
-
-    contentDocument.close();
-
-    // Wait for content to load then print
-    printFrame.onload = function () {
-      printFrame.contentWindow.focus();
-      printFrame.contentWindow.print();
-
-      // Remove the iframe after printing
-      setTimeout(() => {
-        document.body.removeChild(printFrame);
-      }, 1000);
-    };
+    // Open the generated PDF in a new tab so it matches the styled PDF layout
+    generateDESCRIPTIONDetailsPDF(fullRequest, { openInNewWindow: true });
   };
 
   return (
@@ -3769,7 +3217,17 @@ const RequestDetailsModal = ({
                 <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
                   <FaBoxOpen className="mr-2" /> item Details
                   <button
-                    onClick={() => generateDESCRIPTIONDetailsPDF(request)}
+                    onClick={() => {
+                      try {
+                        generateDESCRIPTIONDetailsPDF({
+                          ...request,
+                          transporterDetails,
+                        });
+                      } catch (err) {
+                        console.error("PDF generation failed:", err);
+                        showToast("Failed to generate PDF: " + err.message, "error");
+                      }
+                    }}
                     className="ml-auto px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center transition-colors"
                   >
                     <FaFilePdf className="mr-2" /> Download items PDF
@@ -4609,7 +4067,11 @@ const RequestDetailsModal = ({
                               setServiceIdError("");
                             }}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter" && serviceId.trim()) {
+                              if (
+                                e.key === "Enter" &&
+                                !isSuperAdmin &&
+                                serviceId.trim()
+                              ) {
                                 e.preventDefault();
                                 handleEmployeeSearch();
                               }
@@ -4625,8 +4087,11 @@ const RequestDetailsModal = ({
 
                         <button
                           onClick={handleEmployeeSearch}
+                          disabled={isSuperAdmin}
                           className={`px-4 py-3 rounded-r-lg ${
-                            "bg-blue-500 hover:bg-blue-600 text-white"
+                            isSuperAdmin
+                              ? "bg-gray-300 cursor-not-allowed"
+                              : "bg-blue-500 hover:bg-blue-600 text-white"
                           }`}
                         >
                           <FaSearch />
@@ -4704,6 +4169,7 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
+                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.name}
                           onChange={(e) =>
                             handleNonSltFieldChange("name", e.target.value)
@@ -4727,6 +4193,7 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
+                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.companyName}
                           onChange={(e) =>
                             handleNonSltFieldChange(
@@ -4753,6 +4220,7 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
+                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.nic}
                           onChange={(e) =>
                             handleNonSltFieldChange("nic", e.target.value)
@@ -4776,6 +4244,7 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="text"
+                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.contactNo}
                           onChange={(e) =>
                             handleNonSltFieldChange("contactNo", e.target.value)
@@ -4799,6 +4268,7 @@ const RequestDetailsModal = ({
                         )}
                         <input
                           type="email"
+                          disabled={isSuperAdmin}
                           value={nonSltStaffDetails.email}
                           onChange={(e) =>
                             handleNonSltFieldChange("email", e.target.value)
@@ -5160,15 +4630,9 @@ const RequestDetailsModal = ({
                       <div className="flex space-x-4">
                         <button
                           onClick={() => handleReject(request)}
-                          disabled={isRejecting}
-                          className={`px-4 py-2 rounded-lg text-white text-sm font-medium flex items-center ${
-                            isRejecting
-                              ? "bg-red-300 cursor-not-allowed"
-                              : "bg-red-500 hover:bg-red-600"
-                          }`}
+                          className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium flex items-center"
                         >
-                          <FaTimes className="mr-2" />
-                          {isRejecting ? "Rejecting..." : "Reject"}
+                          <FaTimes className="mr-2" /> Reject
                         </button>
                         <button
                           onClick={() => handleApprove(request)}
