@@ -54,6 +54,7 @@ const UserManagement = () => {
   const closeModal = () => {
     setShowModal(false);
     setCurrentUser(null);
+    setModalMode("view");
   };
 
   const normalizeEditBranches = (branches) => {
@@ -183,14 +184,21 @@ const UserManagement = () => {
 
     try {
       if (modalMode === "edit") {
-        // For edit, password is optional
-        if (!formData.userId || !formData.name || !formData.email) {
-          return toast.error("Please fill all required fields");
+        if (!formData.role) {
+          return toast.error("Please select a role");
         }
 
-        const dataToSend = { ...formData };
+        const userId = currentUser?._id || currentUser?.id;
+        if (!userId) {
+          return toast.error("User record could not be resolved");
+        }
 
-        await userManagementService.updateUser(currentUser._id, dataToSend);
+        const dataToSend = {
+          role: formData.role,
+          branches: normalizeEditBranches(formData.branches),
+        };
+
+        await userManagementService.updateUser(userId, dataToSend);
         toast.success("User updated successfully");
       }
 
@@ -226,8 +234,8 @@ const UserManagement = () => {
         name={name}
         value={formData[name] || ""}
         onChange={handleInputChange}
-        disabled={modalMode === "view"}
-        readOnly={modalMode === "view"}
+        disabled={modalMode !== "edit"}
+        readOnly
         className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
           modalMode === "view"
             ? "bg-gray-100 text-gray-700"
@@ -746,12 +754,10 @@ const UserManagement = () => {
                           required
                         >
                           <option value="User">User</option>
-                          <option value="Approver">Executive</option>
                           <option value="Security Officer">
                             Security Officer
                           </option>
                           <option value="Pleader">Patrol Leader</option>
-                          <option value="SuperAdmin">SuperAdmin</option>
                         </select>
                       </div>
 
@@ -831,10 +837,8 @@ const UserManagement = () => {
                         }`}
                       >
                         <option value="User">User</option>
-                        <option value="Approver">Executive</option>
                         <option value="Security Officer">Security Officer</option>
                         <option value="Pleader">Patrol Leader</option>
-                        <option value="SuperAdmin">SuperAdmin</option>
                       </select>
                     </div>
 
@@ -847,7 +851,7 @@ const UserManagement = () => {
                         multiple
                         value={formData.branches || []}
                         onChange={handleInputChange}
-                        disabled={modalMode === "view"}
+                        disabled={modalMode !== "edit"}
                         className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-32 ${
                           modalMode === "view"
                             ? "bg-gray-100 text-gray-700"
