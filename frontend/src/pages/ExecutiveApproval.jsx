@@ -17,7 +17,7 @@ import {
   getGatePassRequest,
 } from "../services/RequestService.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { FaSearch } from "react-icons/fa";
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
@@ -620,8 +620,7 @@ const ExecutiveApproval = () => {
       setpendingItems(pendingItems.filter((i) => i.refNo !== item.refNo));
       setapprovedItems([...approvedItems, approvedItem]);
 
-      // Send email to petrol leader
-      await sendApprovalEmailToPetrolLeader(approvedItem, comment);
+      // Email notification is sent server-side by the backend controller
 
       // Reset modal and comment
       setShowModal(false);
@@ -635,345 +634,11 @@ const ExecutiveApproval = () => {
       showToast("Failed to approve request", "error");
     }
   };
-  const sendReturnEmail = async (request, comment, itemDetails = []) => {
-    try {
-      if (!request.senderDetails?.email) {
-        showToast("Sender email not available", "error");
-        return;
-      }
 
-      const emailSubject = `Returnable items Update: ${request.refNo}`;
+  // Email sending functions removed — all notifications are now sent
+  // server-side by backend controllers (sendMail.js)
 
-      // Create items table for email
-      const itemsTable =
-        itemDetails.length > 0
-          ? `
-        <div style="margin: 20px 0;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Returned items</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">item Name</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Serial Number</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Category</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Quantity</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemDetails
-                .map(
-                  (item) => `
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemDescription || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.serialNumber || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.categoryDescription || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemQuantity || "1"
-                  }</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `
-          : "";
 
-      const emailBody = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #2fd33dff; margin-bottom: 5px;">Returnable items Update</h2>
-            <p style="color: #757575; font-size: 14px;">Reference Number: ${
-              request.refNo
-            }</p>
-          </div>
-          
-          <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-            <p>Dear ${request.senderDetails.name},</p>
-            
-            <p>We would like to inform you that ${
-              itemDetails.length
-            } returnable item(s) under reference number <b>${
-              request.refNo
-            }</b> have been returned by the Receiver.</p>
-            <p>You can view it under your <i>Completed</i> or relevant section.</p>
-          </div>
-  
-          ${itemsTable}
-          
-          <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-            <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-            <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-          </div>
-        </div>
-      `;
-
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Return notification email sent to requester", "success");
-    } catch (error) {
-      console.error("Failed to send return email:", error);
-      showToast("Failed to send return email", "error");
-    }
-  };
-
-  // Add this function inside the ExecutiveApproval component
-  const sendRejectionEmail = async (request, comment) => {
-    try {
-      if (!request.senderDetails?.email) {
-        showToast("Sender email not available", "error");
-        return;
-      }
-
-      const emailSubject = `Gate Pass Request ${request.refNo} - Rejected`;
-
-      // Create a professional email body with HTML formatting
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #d32f2f; margin-bottom: 5px;">Gate Pass Request Rejected</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${
-            request.refNo
-          }</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-          <p>Dear ${request.senderDetails.name},</p>
-          <p>We regret to inform you that your gate pass request has been <strong>rejected</strong> by the executive approver.</p>
-          
-          <div style="margin-top: 15px;">
-            <p><strong>Reason for Rejection:</strong></p>
-            <p style="padding: 10px; background-color: #fff; border-left: 3px solid #d32f2f; margin-top: 5px;">${comment}</p>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Request Details</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr>
-              <td style="padding: 8px 0; color: #757575; width: 40%;">From Location:</td>
-              <td style="padding: 8px 0;">${request.outLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">To Location:</td>
-              <td style="padding: 8px 0;">${request.inLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">items:</td>
-              <td style="padding: 8px 0;">${request.items
-                .map((item) => `${item.itemDescription} (${item.serialNumber})`)
-                .join(", ")}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Requested Date:</td>
-              <td style="padding: 8px 0;">${new Date(
-                request.createdAt,
-              ).toLocaleDateString()}</td>
-            </tr>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <p>You may submit a new request with the necessary corrections or contact the approver for more information.</p>
-          <p>If you believe this rejection was made in error, please contact the IT support team.</p>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      // Send the email
-      await emailSent({
-        to: request.senderDetails.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Rejection notification email sent to requester", "success");
-    } catch (error) {
-      console.error("Failed to send rejection email:", error);
-      showToast("Failed to send rejection email", "error");
-    }
-  };
-
-  // Add this function RIGHT AFTER the sendRejectionEmail function
-  // (around line 398-399 in your code)
-
-  const sendApprovalEmailToPetrolLeader = async (request, comment) => {
-    try {
-      // Get petrol leader email based on location or other criteria
-      const petrolLeaderEmail = await getPetrolLeaderEmail(request);
-
-      if (!petrolLeaderEmail) {
-        console.log("No petrol leader email found for this request");
-        return;
-      }
-
-      const emailSubject = `Gate Pass Request ${request.refNo} - Executive Approved`;
-
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #2fd33dff; margin-bottom: 5px;">Gate Pass - Executive Approved</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${
-            request.refNo
-          }</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-          <p>Dear Petrol Leader,</p>
-          <p>A gate pass request has been approved by the Executive Officer and is now awaiting your final review.</p>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Request Details</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr>
-              <td style="padding: 8px 0; color: #757575; width: 40%;">Reference No:</td>
-              <td style="padding: 8px 0; font-weight: bold;">${
-                request.refNo
-              }</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Requester:</td>
-              <td style="padding: 8px 0;">${
-                request.senderDetails?.name || "N/A"
-              }</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">From Location:</td>
-              <td style="padding: 8px 0;">${request.outLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">To Location:</td>
-              <td style="padding: 8px 0;">${request.inLocation}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Executive Comment:</td>
-              <td style="padding: 8px 0; font-style: italic;">${
-                comment || "No comment provided"
-              }</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #757575;">Approved Date:</td>
-              <td style="padding: 8px 0;">${new Date().toLocaleDateString()}</td>
-            </tr>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">items (${
-            request.items.length
-          })</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">item Name</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Serial Number</th>
-                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Quantity</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${request.items
-                .map(
-                  (item) => `
-                <tr>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemDescription || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.serialNumber || "N/A"
-                  }</td>
-                  <td style="padding: 8px; border-bottom: 1px solid #eee;">${
-                    item.itemQuantity || "1"
-                  }</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #e8f5e9; border-radius: 4px; border-left: 4px solid #4caf50;">
-          <p><strong>Action Required:</strong> Please review this approved request in your Petrol Leader dashboard.</p>
-          <p style="margin-top: 10px;">
-            <a href="${window.location.origin}/petrol-leader/approvals" 
-               style="background-color: #4caf50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
-              View in Dashboard
-            </a>
-          </p>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>&copy; ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      await emailSent({
-        to: petrolLeaderEmail,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      console.log(
-        "Approval notification sent to petrol leader:",
-        petrolLeaderEmail,
-      );
-    } catch (error) {
-      console.error("Failed to send approval email to petrol leader:", error);
-    }
-  };
-
-  // Add this helper function as well
-  const getPetrolLeaderEmail = async (request) => {
-    try {
-      // Method 1: Hardcoded for testing (use this first)
-      // return "petrol.leader@slt.lk";
-
-      // Method 2: Get from location
-      const location = request.inLocation || request.outLocation || "";
-
-      // Define location-based email mapping
-      const locationEmailMap = {
-        Colombo: "petrol.colombo@slt.lk",
-        Kandy: "petrol.kandy@slt.lk",
-        Galle: "petrol.galle@slt.lk",
-        Matara: "petrol.matara@slt.lk",
-        Jaffna: "petrol.jaffna@slt.lk",
-        // Add more locations as needed
-      };
-
-      // Find matching location
-      for (const [key, email] of Object.entries(locationEmailMap)) {
-        if (location.toLowerCase().includes(key.toLowerCase())) {
-          return email;
-        }
-      }
-
-      // Default petrol leader email
-      return "petrol.leader@slt.lk";
-    } catch (error) {
-      console.error("Error getting petrol leader email:", error);
-      return "petrol.leader@slt.lk"; // Fallback
-    }
-  };
 
   const handleReject = async (item) => {
     try {
@@ -985,8 +650,7 @@ const ExecutiveApproval = () => {
       // Call API to reject status with comment
       const updatedStatus = await rejectStatus(item.refNo, comment);
 
-      // Send rejection email to the requester
-      await sendRejectionEmail(item, comment);
+      // Email notification is sent server-side by the backend controller
 
       // Format the rejected item in the same structure as your UI expects
       const rejectedItem = {
@@ -1009,8 +673,10 @@ const ExecutiveApproval = () => {
       // Reset modal and comment
       setShowModal(false);
       setComment("");
+      showToast("Request rejected successfully", "success");
     } catch (error) {
       console.error("Error rejecting status:", error.message);
+      showToast(error.message || "Failed to reject request", "error");
     }
   };
 
@@ -1523,7 +1189,7 @@ const ExecutiveApproval = () => {
         comment={comment}
         handleApprove={handleApprove}
         handleReject={handleReject}
-        sendReturnEmail={sendReturnEmail}
+        // sendReturnEmail removed — handled server-side
         setComment={setComment}
         showToast={showToast}
         transporterDetails={transportData}
@@ -1546,7 +1212,7 @@ const RequestDetailsModal = ({
   setComment,
   handleApprove,
   handleReject,
-  sendReturnEmail,
+
   showToast,
   transporterDetails,
   isSuperAdmin,
@@ -1595,12 +1261,7 @@ const RequestDetailsModal = ({
 
       console.log("Backend response:", response);
 
-      // Now send the email notification WITH item DETAILS
-      await sendReturnEmail(
-        request,
-        "items successfully returned by executive officer.",
-        selecteditemDetails,
-      );
+      // Email notification is sent server-side by the backend controller
 
       // Show success message
       showToast(
@@ -1647,184 +1308,319 @@ const RequestDetailsModal = ({
     setIsImageModalOpen(true);
   };
 
-  const generateitemDetailsPDF = (items, refNo) => {
-    const doc = new jsPDF();
+  const generateitemDetailsPDF = (fullRequest) => {
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 36;
+    const usableWidth = pageWidth - margin * 2;
+    const lh = 12;
+    const palette = {
+      navy: [20, 55, 120],
+      slate: [78, 92, 115],
+      headingBg: [240, 245, 255],
+      border: [210, 218, 230],
+      tableHeader: [226, 234, 247],
+      text: [33, 37, 41],
+      rowAlt: [249, 251, 255],
+    };
 
-    // Add SLT logo
-    try {
-      doc.addImage(logoUrl, "PNG", margin, 10, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
+    const addHeader = () => {
+      try {
+        doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
+      } catch (e) {
+        // ignore logo rendering issues
+      }
+
+      // Header top rule (moved up to reduce gap under reference)
+      doc.setDrawColor(...palette.navy);
+      doc.setLineWidth(1.1);
+      doc.line(margin, 64, pageWidth - margin, 64);
+
+      doc.setFontSize(17);
+      doc.setTextColor(...palette.navy);
+      doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text("Official Item Movement Record", pageWidth / 2, 46, {
+        align: "center",
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.slate);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
+        align: "right",
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(...palette.text);
+      const refText = `Reference: ${fullRequest.referenceNumber || fullRequest.refNo || "-"}`;
+      doc.text(refText, pageWidth / 2, 58, { align: "center" });
+
+    };
+
+    const ensurePage = (neededHeight) => {
+      if (currentY + neededHeight > pageHeight - margin - 22) {
+        doc.addPage();
+        addHeader();
+        currentY = 84;
+      }
+    };
+
+    const drawKeyValueBox = (title, fields) => {
+      const titleH = 18;
+      const valueMaxWidth = usableWidth * 0.62;
+      const rows = fields.map((f) => {
+        const valueLines = doc.splitTextToSize(String(f[1] || "-"), valueMaxWidth);
+        const rowHeight = Math.max(18, valueLines.length * lh + 6);
+        return { key: f[0], valueLines, rowHeight };
+      });
+      const contentHeight = rows.reduce((sum, r) => sum + r.rowHeight, 0);
+
+      ensurePage(titleH + contentHeight + 18);
+
+      doc.setFillColor(...palette.headingBg);
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY, usableWidth, titleH, "FD");
+
+      doc.setFontSize(10.5);
+      doc.setTextColor(...palette.navy);
+      doc.text(title, margin + 8, currentY + 12);
+
+      let rowTop = currentY + titleH;
+      rows.forEach((row, idx) => {
+        if (idx % 2 === 1) {
+          doc.setFillColor(...palette.rowAlt);
+          doc.rect(margin, rowTop, usableWidth, row.rowHeight, "F");
+        }
+
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.slate);
+        doc.text(String(row.key || "-"), margin + 8, rowTop + 12);
+
+        doc.setTextColor(...palette.text);
+        row.valueLines.forEach((line, lineIdx) => {
+          doc.text(line, margin + usableWidth * 0.34 + 8, rowTop + 12 + lineIdx * lh);
+        });
+
+        doc.setDrawColor(...palette.border);
+        doc.setLineWidth(0.4);
+        doc.line(margin, rowTop + row.rowHeight, margin + usableWidth, rowTop + row.rowHeight);
+        rowTop += row.rowHeight;
+      });
+
+      doc.rect(margin, currentY, usableWidth, titleH + contentHeight);
+      currentY = rowTop + 12;
+    };
+
+    addHeader();
+    let currentY = 84;
+
+    const formatDateValue = (dateValue) => {
+      if (!dateValue) return "-";
+      const dateObj = new Date(dateValue);
+      if (Number.isNaN(dateObj.getTime())) return String(dateValue);
+      return dateObj.toLocaleDateString();
+    };
+
+    const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
+    const senderInfo = fullRequest.senderDetails || fullRequest.sender || {};
+
+    drawKeyValueBox("Sender Details", [
+      ["Name", senderInfo.name || senderInfo.displayName || "-"],
+      ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || fullRequest.senderServiceNo || "-"],
+      ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
+      ["Section", senderInfo.section || senderInfo.department || "-"],
+      ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
+      ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
+    ]);
+
+    if (!items.length) {
+      drawKeyValueBox("Item Details", [["Items", "No items available"]]);
+    } else {
+      items.forEach((it, idx) => {
+        const itemFields = [
+          ["Description", it.itemDescription || it.description || "-"],
+          ["Serial No", it.serialNumber || "-"],
+          ["Item Code", it.itemCode || "-"],
+          ["Category", it.categoryDescription || it.category || "-"],
+          ["Quantity", String(it.itemQuantity || it.quantity || "-")],
+          ["Status", it.status || "-"],
+        ];
+
+        const isReturnable =
+          it.itemReturnable ||
+          it.isReturnable ||
+          String(it.status || "").toLowerCase() === "return to sender" ||
+          String(it.status || "").toLowerCase() === "returnable";
+
+        if (isReturnable) {
+          itemFields.push([
+            "Return Date",
+            formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+          ]);
+        }
+
+        drawKeyValueBox(`Item Details - Item ${idx + 1}`, itemFields);
+      });
     }
 
-    // Header
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 153); // SLT blue color
-    doc.text("SLT Gate Pass - item Details", pageWidth / 2, 20, {
-      align: "center",
-    });
+    const hdrH = 20;
+    const returnableItems = items.filter(it => it.itemReturnable || it.isReturnable || it.status === "return to Sender");
+    if (returnableItems.length > 0) {
+      ensurePage(30 + 40);
+      doc.setFontSize(10.5);
+      doc.setTextColor(...palette.navy);
+      doc.text("Returnable Items", margin, currentY);
+      currentY += 14;
 
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Reference: ${refNo}`, pageWidth / 2, 30, { align: "center" });
+      const retCols = ["Description", "Serial No", "Item Code", "Category", "Qty", "Return Date"];
+      const retColW = [usableWidth * 0.28, usableWidth * 0.14, usableWidth * 0.12, usableWidth * 0.12, usableWidth * 0.09, usableWidth * 0.25];
+      const retColX = [margin];
+      for (let i = 1; i < retColW.length; i++) retColX[i] = retColX[i - 1] + retColW[i - 1];
 
-    // Add current date
-    const currentDate = new Date().toLocaleDateString();
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${currentDate}`, pageWidth - margin, 20, {
-      align: "right",
-    });
+      doc.setFillColor(...palette.tableHeader);
+      doc.setDrawColor(...palette.border);
+      doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+      doc.setFontSize(9);
+      doc.setTextColor(...palette.navy);
+      retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+      currentY += hdrH + 6;
 
-    // Horizontal line
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, 35, pageWidth - margin, 35);
+      returnableItems.forEach((it, idx) => {
+        const desc = it.itemDescription || it.description || "-";
+        const descLines = doc.splitTextToSize(desc, retColW[0] - 8);
+        const rowH = Math.max(20, descLines.length * lh + 6);
 
-    // items Table
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text("item Details", margin, 45);
+        if (currentY + rowH > pageHeight - margin) {
+          doc.addPage();
+          addHeader();
+          currentY = 84;
+          doc.setFillColor(...palette.tableHeader);
+          doc.setDrawColor(...palette.border);
+          doc.rect(margin, currentY, usableWidth, hdrH, "FD");
+          doc.setFontSize(9);
+          doc.setTextColor(...palette.navy);
+          retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
+          currentY += hdrH + 6;
+        }
 
-    // Table header
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.setDrawColor(200, 200, 200);
+        if (idx % 2 === 1) {
+          doc.setFillColor(...palette.rowAlt);
+          doc.rect(margin, currentY - 2, usableWidth, rowH + 4, "F");
+        }
+        doc.setDrawColor(...palette.border);
+        doc.rect(margin, currentY - 2, usableWidth, rowH + 4);
 
-    // Define column widths
-    const col1Width = 60; // item Name
-    const col2Width = 40; // Serial Number
-    const col3Width = 30; // Category
-    const col4Width = 20; // Quantity
-    const col5Width = 30; // Status
-
-    // Draw table header
-    doc.setFillColor(240, 240, 240);
-    doc.rect(
-      margin,
-      yPos,
-      col1Width + col2Width + col3Width + col4Width + col5Width,
-      8,
-      "F",
-    );
-
-    doc.text("item Name", margin + 3, yPos + 5.5);
-    doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-    doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-    doc.text("Qty", margin + col1Width + col2Width + col3Width + 3, yPos + 5.5);
-    doc.text(
-      "Status",
-      margin + col1Width + col2Width + col3Width + col4Width + 3,
-      yPos + 5.5,
-    );
-
-    yPos += 8;
-
-    // Draw table content
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        // Add new page if content exceeds page height
-        doc.addPage();
-        yPos = 20;
-
-        // Add table header on new page
-        doc.setFillColor(240, 240, 240);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-
-        doc.text("item Name", margin + 3, yPos + 5.5);
-        doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-        doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
+        doc.setFontSize(9);
+        doc.setTextColor(...palette.text);
+        descLines.forEach((ln, li) => doc.text(ln, retColX[0] + 4, currentY + 10 + li * lh));
+        doc.text(it.serialNumber || "-", retColX[1] + 4, currentY + 12);
+        doc.text(it.itemCode || "-", retColX[2] + 4, currentY + 12);
+        doc.text(it.categoryDescription || it.category || "-", retColX[3] + 4, currentY + 12);
+        doc.text(String(it.itemQuantity || it.quantity || "-"), retColX[4] + 4, currentY + 12);
         doc.text(
-          "Qty",
-          margin + col1Width + col2Width + col3Width + 3,
-          yPos + 5.5,
-        );
-        doc.text(
-          "Status",
-          margin + col1Width + col2Width + col3Width + col4Width + 3,
-          yPos + 5.5,
+          formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
+          retColX[5] + 4,
+          currentY + 12,
         );
 
-        yPos += 8;
-      }
+        currentY += rowH + 8;
+      });
+      currentY += 4;
+    }
 
-      // Alternate row colors for better readability
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 248, 248);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-      }
+    const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
+    const isNonSltDestination = fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
 
-      // Truncate long text to fit in columns
-      const truncateText = (text, maxLength) => {
-        if (!text) return "N/A";
-        return text.length > maxLength
-          ? text.substring(0, maxLength) + "..."
-          : text;
-      };
+    drawKeyValueBox("Location Details", [
+      [
+        "Out Location",
+        fullRequest.outLocation ||
+          requestCore.outLocation ||
+          fullRequest.companyName ||
+          requestCore.companyName ||
+          "-",
+      ],
+      [
+        "In Location",
+        fullRequest.inLocation || requestCore.inLocation || "-",
+      ],
+    ]);
 
-      doc.text(
-        truncateText(item?.itemDescription || "N/A", 25),
-        margin + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.serialNumber || "N/A", 15),
-        margin + col1Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.categoryDescription || "N/A", 12),
-        margin + col1Width + col2Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        item?.itemQuantity?.toString() || "1",
-        margin + col1Width + col2Width + col3Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        item?.itemReturnable ? "Returnable" : "Non-Returnable",
-        margin + col1Width + col2Width + col3Width + col4Width + 3,
-        yPos + 5.5,
-      );
+    const recv = fullRequest.receiver || fullRequest.receiverDetails || {
+      name: requestCore.receiverName || fullRequest.receiverName || "-",
+      nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
+      contactNo: requestCore.receiverContact || fullRequest.receiverContact || "-",
+      serviceNo: requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
+      group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
+    };
 
-      // Draw horizontal line after each row
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width + col5Width,
-        yPos + 8,
-      );
+    if (isNonSltDestination) {
+      drawKeyValueBox("Receiver Details", [
+        ["Name", recv.name || requestCore.receiverName || "-"],
+        ["Company", fullRequest.companyName || requestCore.companyName || recv.companyName || "-"],
+        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+        ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
+      ]);
+    } else {
+      drawKeyValueBox("Receiver Details", [
+        ["Name", recv.name || requestCore.receiverName || "-"],
+        ["Service No", recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-"],
+        ["Group", recv.group || requestCore.receiverGroup || "-"],
+        ["Section", recv.section || requestCore.receiverSection || "-"],
+        ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
+        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
+      ]);
+    }
 
-      yPos += 8;
-    });
+    const t = fullRequest.transport || fullRequest.transportData || requestCore.transport || {};
 
-    // Footer
-    const footerYPos = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      "This is an electronically generated document and does not require signature.",
-      pageWidth / 2,
-      footerYPos,
-      { align: "center" },
-    );
+    const transportRows = [
+      ["Transport Method", t.transportMethod || "-"],
+      ["Transporter Type", t.transporterType || "-"],
+    ];
 
-    // Save the PDF
-    doc.save(`SLT_GatePass_DESCRIPTIONs_${refNo}.pdf`);
+    if (String(t.transporterType || "").toUpperCase() === "SLT") {
+      transportRows.push(["Service No", t.transporterServiceNo || requestCore.transporterServiceNo || "-"]);
+      transportRows.push(["Name", transporterDetails?.name || t.transporterName || requestCore.transporterName || "-"]);
+      transportRows.push(["Section", transporterDetails?.section || t.transporterSection || requestCore.transporterSection || "-"]);
+      transportRows.push(["Group", transporterDetails?.group || t.transporterGroup || requestCore.transporterGroup || "-"]);
+      transportRows.push(["Designation", transporterDetails?.designation || t.transporterDesignation || requestCore.transporterDesignation || "-"]);
+      transportRows.push(["Contact", transporterDetails?.contactNo || t.transporterContact || requestCore.transporterContact || "-"]);
+    } else {
+      transportRows.push(["Name", t.nonSLTTransporterName || requestCore.nonSLTTransporterName || "-"]);
+      transportRows.push(["NIC", t.nonSLTTransporterNIC || requestCore.nonSLTTransporterNIC || "-"]);
+      transportRows.push(["Contact", t.nonSLTTransporterPhone || requestCore.nonSLTTransporterPhone || "-"]);
+      transportRows.push(["Email", t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-"]);
+    }
+
+    if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
+      transportRows.push(["Vehicle No", t.vehicleNumber || requestCore.vehicleNumber || "-"]);
+      transportRows.push(["Vehicle Model", t.vehicleModel || requestCore.vehicleModel || "-"]);
+    }
+
+    drawKeyValueBox("Transport Details", transportRows);
+
+    const pageCount = doc.getNumberOfPages();
+    for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
+      doc.setPage(pageNo);
+      const footerY = pageHeight - 24;
+      doc.setDrawColor(...palette.border);
+      doc.line(margin, footerY - 10, pageWidth - margin, footerY - 10);
+      doc.setFontSize(8);
+      doc.setTextColor(...palette.slate);
+      doc.text("Electronically generated gate pass document", margin, footerY);
+      doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, {
+        align: "right",
+      });
+    }
+
+    const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
+    doc.save(`SLT_GatePass_${safeRef}.pdf`);
   };
 
   return (
@@ -1923,11 +1719,11 @@ const RequestDetailsModal = ({
               <FaBoxOpen className="mr-2" /> item Details
               <button
                 onClick={() =>
-                  generateitemDetailsPDF(request.items, request.refNo)
+                  generateitemDetailsPDF(request)
                 }
                 className="ml-auto px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center transition-colors"
               >
-                <FaFilePdf className="mr-2" /> Download items PDF
+                <FaFilePdf className="mr-2" /> Download Items PDF
               </button>
             </h3>
             <div className="overflow-x-auto rounded-xl border border-gray-200">

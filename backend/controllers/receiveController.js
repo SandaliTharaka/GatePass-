@@ -709,7 +709,8 @@ const updateApproved = async (req, res) => {
       await statusDoc.request.save();
     }
 
-    // Notify Requester of completion
+    // Notify Requester of completion (capture results)
+    const emailResults = [];
     try {
       const requester = await findRequesterFromRequest(statusDoc.request);
       if (requester && requester.email) {
@@ -720,10 +721,16 @@ const updateApproved = async (req, res) => {
           <p><b>Reference:</b> ${referenceNumber}</p>
           <p>You can view it under your <i>Completed</i> or relevant section.</p>
         `;
-        await sendEmail(requester.email, subject, html);
+        try {
+          const info = await sendEmail(requester.email, subject, html);
+          emailResults.push({ to: requester.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Receiver approve→Requester) failed:", mailErr);
+          emailResults.push({ to: requester.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Receiver approve→Requester) failed:", mailErr);
+      console.error("Email lookup (Receiver approve→Requester) failed:", mailErr);
     }
 
     // Emit real-time event for request completion
@@ -836,7 +843,8 @@ const updateRejected = async (req, res) => {
 
     // Notify ALL lower levels in hierarchy about the rejection
 
-    // 1. Notify Requester (User)
+    // 1..4. Notify lower levels and capture email results
+    const emailResults = [];
     try {
       const requester = await findRequesterFromRequest(statusDoc.request);
       if (requester && requester.email) {
@@ -848,13 +856,18 @@ const updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${statusDoc.recieveOfficerComment}</p>
           <p>You can view this under <i>My Requests – Rejected</i>.</p>
         `;
-        await sendEmail(requester.email, subject, html);
+        try {
+          const info = await sendEmail(requester.email, subject, html);
+          emailResults.push({ to: requester.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Receiver reject→Requester) failed:", mailErr);
+          emailResults.push({ to: requester.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Receiver reject→Requester) failed:", mailErr);
+      console.error("Email lookup (Receiver reject→Requester) failed:", mailErr);
     }
 
-    // 2. Notify Executive Officer
     try {
       const executive = await findExecutiveFromRequest(statusDoc.request);
       if (executive && executive.email) {
@@ -866,13 +879,18 @@ const updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${statusDoc.recieveOfficerComment}</p>
           <p>This will be visible under your Rejected section for tracking.</p>
         `;
-        await sendEmail(executive.email, subject, html);
+        try {
+          const info = await sendEmail(executive.email, subject, html);
+          emailResults.push({ to: executive.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Receiver reject→Executive) failed:", mailErr);
+          emailResults.push({ to: executive.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Receiver reject→Executive) failed:", mailErr);
+      console.error("Email lookup (Receiver reject→Executive) failed:", mailErr);
     }
 
-    // 3. Notify Verifier (Petrol Leader 1)
     try {
       const verifier = await findVerifierFromRequest(statusDoc.request);
       if (verifier && verifier.email) {
@@ -884,13 +902,18 @@ const updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${statusDoc.recieveOfficerComment}</p>
           <p>This will be visible under your Rejected section for tracking.</p>
         `;
-        await sendEmail(verifier.email, subject, html);
+        try {
+          const info = await sendEmail(verifier.email, subject, html);
+          emailResults.push({ to: verifier.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Receiver reject→Verifier) failed:", mailErr);
+          emailResults.push({ to: verifier.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Receiver reject→Verifier) failed:", mailErr);
+      console.error("Email lookup (Receiver reject→Verifier) failed:", mailErr);
     }
 
-    // 4. Notify Dispatcher (Petrol Leader 2)
     try {
       const dispatcher = await findDispatcherFromRequest(statusDoc.request);
       if (dispatcher && dispatcher.email) {
@@ -902,10 +925,16 @@ const updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${statusDoc.recieveOfficerComment}</p>
           <p>This will be visible under your Rejected section for tracking.</p>
         `;
-        await sendEmail(dispatcher.email, subject, html);
+        try {
+          const info = await sendEmail(dispatcher.email, subject, html);
+          emailResults.push({ to: dispatcher.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Receiver reject→Dispatcher) failed:", mailErr);
+          emailResults.push({ to: dispatcher.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Receiver reject→Dispatcher) failed:", mailErr);
+      console.error("Email lookup (Receiver reject→Dispatcher) failed:", mailErr);
     }
 
     // Emit real-time event for rejection
@@ -914,7 +943,7 @@ const updateRejected = async (req, res) => {
       emitRequestRejection(io, statusDoc.request, "Receiver");
     }
 
-    return res.status(200).json(statusDoc);
+    return res.status(200).json({ status: statusDoc, emailResults });
   } catch (error) {
     console.error("Error rejecting status:", error);
     res.status(400).json({ error: error.message });

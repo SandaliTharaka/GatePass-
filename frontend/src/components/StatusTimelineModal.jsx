@@ -29,8 +29,8 @@ const StatusTimelineModal = ({ isOpen, onClose, referenceNumber }) => {
   const getStatusBadgeClass = (code) => {
     const label = getStatusLabel(code);
     if (label.includes("Pending")) return "bg-amber-100 text-amber-800 border-amber-300";
-    if (label.includes("Approved") || label.includes("Received")) return "bg-emerald-100 text-emerald-800 border-emerald-300";
     if (label.includes("Rejected")) return "bg-rose-100 text-rose-800 border-rose-300";
+    if (label.includes("Approved") || label.includes("Received")) return "bg-emerald-100 text-emerald-800 border-emerald-300";
     if (label === "Canceled") return "bg-rose-100 text-rose-800 border-rose-300";
     return "bg-gray-100 text-gray-800 border-gray-300";
   };
@@ -38,8 +38,8 @@ const StatusTimelineModal = ({ isOpen, onClose, referenceNumber }) => {
   const getBorderClass = (code) => {
     const label = getStatusLabel(code);
     if (label.includes("Pending")) return "border-amber-300";
-    if (label.includes("Approved") || label.includes("Received")) return "border-emerald-300";
     if (label.includes("Rejected")) return "border-rose-300";
+    if (label.includes("Approved") || label.includes("Received")) return "border-emerald-300";
     if (label === "Canceled") return "border-rose-300";
     return "border-gray-300";
   };

@@ -2,7 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const uploadsRootDir = path.resolve(__dirname, '..', 'uploads');
+// In CI/CD with multiple releases, ensure this Uploads directory is symlinked to a shared persistent folder.
+const uploadsRootDir = path.resolve(__dirname, '..', '..', 'Uploads');
 const imagesUploadDir = path.join(uploadsRootDir, 'images');
 const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
 const mimeToExt = {

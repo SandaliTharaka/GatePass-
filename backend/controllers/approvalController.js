@@ -314,7 +314,8 @@ exports.updateApproved = async (req, res) => {
 
     await status.save();
 
-    // Notify verifier for Out-location
+    // Notify verifier for Out-location and collect email results
+    const emailResults = [];
     try {
       const outLocation = status.request.outLocation;
       const verifier = await findVerifierForOutLocation(outLocation);
@@ -333,7 +334,7 @@ exports.updateApproved = async (req, res) => {
         const subject = `Gate Pass needs verification: ${referenceNumber}`;
         const html = `
           <p>Dear ${verifier.name || "Verifier"},</p>
-          <p>A gate pass was <b>approved by the Executive Officer</b> and is awaiting your verification.</p>
+          <p>A gate pass was <b>approved by the Executive Officer ${req.user?.name || ""}</b> and is awaiting your verification.</p>
           <p><b>Reference:</b> ${referenceNumber}<br/>
              <b>Out-location (Sender):</b> ${outLocation || "-"}<br/>
              ${destinationInfo}<br/>
@@ -342,10 +343,16 @@ exports.updateApproved = async (req, res) => {
              }</p>
           <p>Please review it in your <i>Verify – Pending</i> section.</p>
         `;
-        await sendEmail(verifier.email, subject, html);
+        try {
+          const info = await sendEmail(verifier.email, subject, html);
+          emailResults.push({ to: verifier.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Executive→Verifier) failed:", mailErr);
+          emailResults.push({ to: verifier.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Executive→Verifier) failed:", mailErr);
+      console.error("Email lookup (Executive→Verifier) failed:", mailErr);
     }
 
     const fresh = await Status.findById(status._id).populate("request").lean();
@@ -356,7 +363,7 @@ exports.updateApproved = async (req, res) => {
       emitRequestApproval(io, fresh.request, "Approver");
     }
 
-    return res.json(fresh);
+    return res.json({ ...fresh, emailResults });
   } catch (err) {
     console.error("Executive approve error:", err);
     return res.status(500).json({ message: "Internal server error" });
@@ -386,6 +393,7 @@ exports.updateRejected = async (req, res) => {
     if (!validation.isValid) {
       return res.status(400).json({
         error: "Validation failed",
+        message: validation.errors.join(", "),
         details: validation.errors,
       });
     }
@@ -448,11 +456,12 @@ exports.updateRejected = async (req, res) => {
     await status.save();
     console.log("Saved status with rejectedByBranch:", status.rejectedByBranch);
 
-    // Notify Requester
+    // Notify Requester and capture email results
+    const emailResults = [];
     try {
       const requester = await findRequesterFromRequest(status.request);
       if (requester && requester.email) {
-        const subject = `Gate Pass rejected by Executive Officer: ${referenceNumber}`;
+        const subject = `Gate Pass rejected by Executive Officer ${req.user?.name || ""} (${req.user?.serviceNo || ""}): ${referenceNumber}`;
         const html = `
           <p>Dear ${requester.name || "Requester"},</p>
           <p>Your gate pass request has been <b>rejected by the Executive Officer</b>.</p>
@@ -460,10 +469,16 @@ exports.updateRejected = async (req, res) => {
           <p><b>Reason:</b> ${status.executiveOfficerComment}</p>
           <p>You can view this under <i>My Requests – Rejected</i>.</p>
         `;
-        await sendEmail(requester.email, subject, html);
+        try {
+          const info = await sendEmail(requester.email, subject, html);
+          emailResults.push({ to: requester.email, ok: true, info });
+        } catch (mailErr) {
+          console.error("Email (Executive reject→Requester) failed:", mailErr);
+          emailResults.push({ to: requester.email, ok: false, error: String(mailErr) });
+        }
       }
     } catch (mailErr) {
-      console.error("Email (Executive reject→Requester) failed:", mailErr);
+      console.error("Email lookup (Executive reject→Requester) failed:", mailErr);
     }
 
     const fresh = await Status.findById(status._id).populate("request").lean();
@@ -474,7 +489,7 @@ exports.updateRejected = async (req, res) => {
       emitRequestRejection(io, fresh.request, "Approver");
     }
 
-    return res.json(fresh);
+    return res.json({ ...fresh, emailResults });
   } catch (err) {
     console.error("Executive reject error:", err);
     return res.status(500).json({ message: "Internal server error" });

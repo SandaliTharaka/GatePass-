@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, Link, Navigate } from "react-router-dom";
 import {
   Package,
@@ -23,7 +23,7 @@ import {
 } from "../services/RequestService.js";
 import axiosInstance from "../services/axiosConfig.js";
 import { useToast } from "../components/ToastProvider.jsx";
-import { emailSent } from "../services/emailService.js";
+// Email notifications are handled server-side by backend controllers
 import { FileSpreadsheet } from "lucide-react";
 import {
   useItemCategories,
@@ -43,6 +43,7 @@ import {
   validateName,
   validateAddress,
   validateSerialNumber,
+  validateServiceNumber,
 } from "../utils/validators.js";
 
 const NewRequest = () => {
@@ -64,6 +65,8 @@ const NewRequest = () => {
   const [inLocations, setInLocations] = useState([]);
   const [outLocations, setOutLocations] = useState([]);
   const [erpLocations, setErpLocations] = useState([]);
+  const allowOutLocationAutoFillRef = useRef(true);
+  const outLocationSelectRef = useRef(null);
   const { showToast } = useToast();
 
   // Use ERP GatePass API for categories
@@ -80,6 +83,7 @@ const NewRequest = () => {
     returnable: "No",
     images: [],
     returnDate: "",
+    itemFound: false,
   });
 
   // For serial number lookup
@@ -140,63 +144,78 @@ const NewRequest = () => {
     setUser(userData);
   }, []);
 
+  const isReturnableItem = (item) => {
+    return (
+      item?.itemReturnable === true ||
+      item?.itemReturnable === "true" ||
+      item?.itemReturnable === "Yes" ||
+      item?.itemReturnable === "yes" ||
+      item?.isReturnable === true ||
+      item?.isReturnable === "true" ||
+      item?.isReturnable === "Yes" ||
+      item?.isReturnable === "yes" ||
+      String(item?.status || "").toLowerCase() === "returnable"
+    );
+  };
+
+  const fetchUserStats = async () => {
+    try {
+      setStatsLoading(true);
+      const token = localStorage.getItem("token");
+
+      if (!token || !user) {
+        setStatsLoading(false);
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/requests/${user.serviceNo}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.ok) {
+        const requests = await response.json();
+
+        let totalItems = 0;
+        let returnableItems = 0;
+        let nonReturnableItems = 0;
+
+        requests.forEach((request) => {
+          if (request.items && Array.isArray(request.items)) {
+            request.items.forEach((item) => {
+              const quantity = Number(item.itemQuantity || item.qty || 1) || 1;
+              totalItems += quantity;
+
+              if (isReturnableItem(item)) {
+                returnableItems += quantity;
+              } else {
+                nonReturnableItems += quantity;
+              }
+            });
+          }
+        });
+
+        setUserStats({
+          totalItems,
+          returnableItems,
+          nonReturnableItems,
+        });
+      }
+
+      setStatsLoading(false);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      setStatsLoading(false);
+    }
+  };
+
   // Fetch user stats
   useEffect(() => {
-    const fetchUserStats = async () => {
-      try {
-        setStatsLoading(true);
-        const token = localStorage.getItem("token");
-
-        if (!token || !user) {
-          setStatsLoading(false);
-          return;
-        }
-
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/requests/${user.serviceNo}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        if (response.ok) {
-          const requests = await response.json();
-
-          let totalItems = 0;
-          let returnableItems = 0;
-          let nonReturnableItems = 0;
-
-          requests.forEach((request) => {
-            if (request.items && Array.isArray(request.items)) {
-              request.items.forEach((item) => {
-                const quantity = item.itemQuantity || 1;
-                totalItems += quantity;
-
-                if (item.itemReturnable) {
-                  returnableItems += quantity;
-                } else {
-                  nonReturnableItems += quantity;
-                }
-              });
-            }
-          });
-
-          setUserStats({
-            totalItems,
-            returnableItems,
-            nonReturnableItems,
-          });
-        }
-        setStatsLoading(false);
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-        setStatsLoading(false);
-      }
-    };
-
     if (user) {
       fetchUserStats();
     }
@@ -275,7 +294,7 @@ const NewRequest = () => {
         setInLocations(locations);
         setOutLocations(locations);
 
-        if (erpFingerLocation) {
+        if (allowOutLocationAutoFillRef.current && erpFingerLocation) {
           const match = locations.find(
             (l) =>
               l.fingerscanLocation?.trim().toLowerCase() ===
@@ -352,18 +371,23 @@ const NewRequest = () => {
 
     const remainingSlots = Math.max(0, 5 - currentItem.images.length);
     if (remainingSlots <= 0) {
-      showToast("Maximum 5 photos allowed per item", "warning");
+      showToast(
+        `Maximum 5 photos allowed per item${currentItem.itemFound ? "" : " (minimum 2 required)"}`,
+        "warning",
+      );
       e.target.value = "";
       return;
     }
 
     if (files.length > remainingSlots) {
-      showToast(`Only ${remainingSlots} more photo(s) can be added`, "warning");
+      showToast(`Cannot add ${files.length} photos. Only ${remainingSlots} more photo(s) can be added`, "warning");
+      e.target.value = "";
+      return;
     }
 
     setCurrentItem((prev) => ({
       ...prev,
-      images: [...prev.images, ...files.slice(0, remainingSlots)],
+      images: [...prev.images, ...files],
     }));
 
     // Reset so selecting the same file again still triggers onChange.
@@ -377,18 +401,29 @@ const NewRequest = () => {
       return;
     }
 
+    // Clear stale ERP fields immediately before every new lookup
+    setCurrentItem((prev) => ({
+      ...prev,
+      serialNumber,
+      itemCode: "",
+      itemDescription: "",
+      itemCategory: "",
+      categoryDescription: "",
+      itemFound: false,
+    }));
+
     setIsSearchingItem(true);
     try {
       const { getItemBySerialNumber } =
         await import("../services/itemHolidayApiService.js");
       const itemData = await getItemBySerialNumber(serialNumber);
 
-      console.log("Item data received in frontend:", itemData);
+      const foundItem = !!(itemData?.foundInErp);
 
       // Populate form with API data
       setCurrentItem((prev) => ({
         ...prev,
-        serialNumber: serialNumber,
+        serialNumber,
         itemCode: itemData.itemCode || "",
         itemDescription: itemData.itemDescription || "",
         itemCategory: itemData.itemCategory || "",
@@ -397,23 +432,16 @@ const NewRequest = () => {
         returnable: prev.returnable || "No",
         images: prev.images || [],
         returnDate: prev.returnDate || "",
+        itemFound: foundItem,
       }));
-
-      console.log("Current item after update:", {
-        serialNumber: serialNumber,
-        itemCode: itemData.itemCode,
-        itemDescription: itemData.itemDescription,
-        itemCategory: itemData.itemCategory,
-        categoryDescription: itemData.categoryDescription,
-      });
-
     } catch (error) {
       console.error("Error fetching item:", error);
-      // Silently fail - user can fill manually
-      // Only show message if it's not a 404
-      if (error.response?.status !== 404) {
-        console.log("Item lookup failed, user can fill manually");
-      }
+      // Serial not found in ERP — mark explicitly so 2 images become mandatory
+      setCurrentItem((prev) => ({
+        ...prev,
+        serialNumber,
+        itemFound: false,
+      }));
     } finally {
       setIsSearchingItem(false);
     }
@@ -435,6 +463,15 @@ const NewRequest = () => {
     // Validate return date if returnable is Yes
     if (currentItem.returnable === "Yes" && !currentItem.returnDate) {
       showToast("Please select a return date for returnable items", "warning");
+      return;
+    }
+
+    // Validate images: mandatory 2 minimum only when serial NOT found in ERP
+    if (!currentItem.itemFound && currentItem.images.length < 2) {
+      showToast(
+        `Please upload at least 2 images for this item (serial number not found in ERP)`,
+        "warning",
+      );
       return;
     }
 
@@ -467,13 +504,14 @@ const NewRequest = () => {
       returnable: "No",
       returnDate: "",
       images: [],
+      itemFound: false,
     });
     setSerialNumberInput("");
+    setSerialNumberError(""); // clear stale error so it can't block future submit
     setShowItemForm(false);
   };
 
   const handleCancelEdit = () => {
-    // Reset the currentItem
     setCurrentItem({
       serialNumber: "",
       itemCode: "",
@@ -484,8 +522,10 @@ const NewRequest = () => {
       returnable: "No",
       returnDate: "",
       images: [],
+      itemFound: false,
     });
     setSerialNumberInput("");
+    setSerialNumberError("");
     setShowItemForm(false);
   };
   const removeItem = (id) => {
@@ -498,8 +538,16 @@ const NewRequest = () => {
   };
 
   const handleSearchReceiver = async () => {
-    if (!receiverServiceNo.trim()) {
+    const normalizedReceiverServiceNo = receiverServiceNo.trim();
+
+    if (!normalizedReceiverServiceNo) {
       showToast("Please enter a service number", "warning");
+      return;
+    }
+
+    const serviceNoError = validateServiceNumber(normalizedReceiverServiceNo);
+    if (serviceNoError) {
+      showToast(serviceNoError, "warning");
       return;
     }
 
@@ -508,7 +556,7 @@ const NewRequest = () => {
       const response = await axiosInstance.post("/erp/employee-details", {
         organizationID: "string",
         costCenterCode: "string",
-        employeeNo: receiverServiceNo.trim(),
+        employeeNo: normalizedReceiverServiceNo,
       });
 
       if (response.data && response.data.success && response.data.data) {
@@ -516,12 +564,27 @@ const NewRequest = () => {
         let empData = response.data.data;
 
         // If the data itself has a nested data array, extract it
+        if (Array.isArray(empData) && empData.length > 0) {
+          empData = empData[0];
+        }
+
         if (
           empData.data &&
           Array.isArray(empData.data) &&
           empData.data.length > 0
         ) {
           empData = empData.data[0];
+        }
+
+        const matchedServiceNo = String(
+          empData.employeeNumber || empData.employeeNo || empData.serviceNo || "",
+        ).trim();
+
+        if (!matchedServiceNo || matchedServiceNo !== normalizedReceiverServiceNo) {
+          setReceiverDetails(null);
+          setReceiverFingerLocation(null);
+          showToast("Receiver details not found in ERP", "error");
+          return;
         }
 
         // Map ERP response to receiver details format
@@ -544,6 +607,9 @@ const NewRequest = () => {
         };
 
         setReceiverDetails(receiverData);
+        if (receiverData.serviceNo) {
+          setReceiverServiceNo(String(receiverData.serviceNo).trim());
+        }
 
         if (empData.fingerScanLocation) {
           setReceiverFingerLocation(empData.fingerScanLocation.trim());
@@ -557,6 +623,9 @@ const NewRequest = () => {
           const data = await searchReceiverByServiceNo(receiverServiceNo);
           if (data) {
             setReceiverDetails(data);
+            if (data.serviceNo) {
+              setReceiverServiceNo(String(data.serviceNo).trim());
+            }
             showToast("Receiver details loaded from database", "success");
           } else {
             setReceiverDetails(null);
@@ -564,7 +633,7 @@ const NewRequest = () => {
           }
         } catch (fallbackError) {
           setReceiverDetails(null);
-          showToast("Receiver not found", "error");
+          showToast("Receiver details not found in ERP", "error");
         }
       }
     } catch (error) {
@@ -573,121 +642,22 @@ const NewRequest = () => {
         const data = await searchReceiverByServiceNo(receiverServiceNo);
         if (data) {
           setReceiverDetails(data);
+          if (data.serviceNo) {
+            setReceiverServiceNo(String(data.serviceNo).trim());
+          }
           showToast("Receiver details loaded from database", "success");
         } else {
           setReceiverDetails(null);
-          showToast("Receiver not found", "error");
+          showToast("Receiver details not found in ERP", "error");
         }
       } catch (fallbackError) {
         setReceiverDetails(null);
-        showToast("Receiver not found", "error");
+        showToast("Receiver details not found in ERP", "error");
       }
     }
   };
 
-  // Add this function to the NewRequest component
-  const sendExecutiveNotificationEmail = async (
-    executiveData,
-    requestData,
-    referenceNumber,
-  ) => {
-    try {
-      if (!executiveData?.email) {
-        showToast("Executive officer email not available", "warning");
-        return;
-      }
-
-      const emailSubject = `New Gate Pass Request ${referenceNumber} - Requires Your Approval`;
-
-      // Create a professional email body with HTML formatting
-      const emailBody = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h2 style="color: #3b82f6; margin-bottom: 5px;">New Gate Pass Request</h2>
-          <p style="color: #757575; font-size: 14px;">Reference Number: ${referenceNumber}</p>
-        </div>
-        
-        <div style="margin-bottom: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-          <p>Dear ${executiveData.name},</p>
-          <p>A new gate pass request has been submitted and <strong>requires your approval</strong>.</p>
-          
-          <div style="margin-top: 15px;">
-            <p><strong>Request Details:</strong></p>
-            <ul style="padding-left: 20px;">
-              <li>From: ${user?.name} (${user?.serviceNo})</li>
-              <li>From Location: ${outLocation}</li>
-              <li>To Location: ${inLocation}</li>
-              <li>Items: ${items.length} item(s)</li>
-              <li>Date: ${new Date().toLocaleString()}</li>
-            </ul>
-          </div>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <h3 style="color: #424242; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px;">Item Summary</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-            <tr style="background-color: #f5f5f5;">
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Item</th>
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Serial No</th>
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Category</th>
-              <th style="padding: 8px; text-align: left; border-bottom: 1px solid #e0e0e0;">Status</th>
-            </tr>
-            ${items
-              .map(
-                (item) => `
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.itemDescription
-                }</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.serialNumber
-                }</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.categoryDescription
-                }</td>
-                <td style="padding: 8px; border-bottom: 1px solid #e0e0e0;">${
-                  item.returnable === "Yes" ? "Returnable" : "Non-Returnable"
-                }</td>
-              </tr>
-            `,
-              )
-              .join("")}
-          </table>
-        </div>
-        
-        <div style="margin-bottom: 20px;">
-          <p>Please review this request at your earliest convenience by logging into the Gate Pass Management System.</p>
-          <div style="text-align: center; margin-top: 20px;">
-            <a href="${
-              window.location.origin
-            }/executive-approval" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-weight: bold;">Review Request</a>
-          </div>
-        </div>
-        
-        <div style="font-size: 12px; color: #757575; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
-          <p>This is an automated email from the SLT Gate Pass Management System. Please do not reply to this email.</p>
-          <p>© ${new Date().getFullYear()} Sri Lanka Telecom. All rights reserved.</p>
-        </div>
-      </div>
-    `;
-
-      // Send the email
-      await emailSent({
-        to: executiveData.email,
-        subject: emailSubject,
-        html: emailBody,
-      });
-
-      showToast("Notification email sent to executive officer", "success");
-    } catch (error) {
-      console.error("Failed to send notification email:", error);
-      showToast(
-        "Failed to send notification email to executive officer",
-        "warning",
-      );
-    }
-  };
-
+  
   const handleSubmit = async () => {
     try {
       // ⭐ VALIDATION 1: Check if items exist
@@ -730,6 +700,29 @@ const NewRequest = () => {
           "Please select the dispatching branch (Out Location)",
           "warning",
         );
+        return;
+      }
+
+      const normalizedReceiverServiceNo = receiverServiceNo.trim();
+      const hasSLTReceiverDetails =
+        normalizedReceiverServiceNo &&
+        receiverDetails &&
+        String(receiverDetails.serviceNo || "").trim() ===
+          normalizedReceiverServiceNo;
+      const hasNonSLTReceiverDetails =
+        receiverNIC.trim() && receiverName.trim() && receiverContact.trim();
+
+      const receiverValidationError =
+        destinationType === "slt"
+          ? hasSLTReceiverDetails
+            ? ""
+            : "Receiver details are required"
+          : hasNonSLTReceiverDetails
+            ? ""
+            : "Receiver details are required";
+
+      if (receiverValidationError) {
+        showToast(receiverValidationError, "warning");
         return;
       }
 
@@ -1068,26 +1061,11 @@ const NewRequest = () => {
         `Request created successfully! Reference: ${response.referenceNumber}`,
         "success",
       );
-
-      // Send notification email to executive officer
-      try {
-        const selectedOfficer = executiveOfficers.find(
-          (officer) => officer.serviceNo === executiveOfficer,
-        );
-
-        if (selectedOfficer) {
-          await sendExecutiveNotificationEmail(
-            selectedOfficer,
-            { outLocation, inLocation, items },
-            response.referenceNumber,
-          );
-        } else {
-          console.error("Selected executive officer not found in the list");
-        }
-      } catch (emailError) {
-        console.error("Error sending notification email:", emailError);
-        // Don't fail the whole request if email fails
-      }
+      // Clear the form so user can create another request
+      resetForm();
+      // Refresh summary in the background without blocking the form reset
+      void fetchUserStats();
+      // Email notification is sent server-side by the backend controller
     } catch (error) {
       setIsSubmitting(false);
       console.error("Submission error:", error);
@@ -1147,6 +1125,60 @@ const NewRequest = () => {
       setTransporterDetails(null);
       showToast("Transporter not found", "error");
     }
+  };
+
+  // Reset the entire New Request form to initial state
+  const resetForm = () => {
+    setItems([]);
+    setCurrentItem({
+      serialNumber: "",
+      itemCode: "",
+      itemDescription: "",
+      itemCategory: "",
+      categoryDescription: "",
+      qty: 1,
+      returnable: "No",
+      returnDate: "",
+      images: [],
+    });
+    setSerialNumberInput("");
+    setShowItemForm(false);
+
+    setDestinationType("slt");
+    setInLocation("");
+    setCompanyName("");
+    setCompanyAddress("");
+
+    setReceiverServiceNo("");
+    setReceiverNIC("");
+    setReceiverName("");
+    setReceiverContact("");
+    setReceiverDetails(null);
+    setReceiverFingerLocation(null);
+
+    setTransportMethod("");
+    setTransporterType("");
+    setTransporterServiceNo("");
+    setTransporterDetails(null);
+    setVehicleNumber("");
+    setVehicleModel("");
+    setNonSLTTransporterName("");
+    setNonSLTTransporterNIC("");
+    setNonSLTTransporterPhone("");
+    setNonSLTTransporterEmail("");
+
+    // Clear validation errors
+    setVehicleNumberError("");
+    setCompanyNameError("");
+    setCompanyAddressError("");
+    setReceiverNICError("");
+    setReceiverNameError("");
+    setReceiverContactError("");
+    setNonSLTTransporterNameError("");
+    setNonSLTTransporterNICError("");
+    setNonSLTTransporterPhoneError("");
+    setNonSLTTransporterEmailError("");
+    setSerialNumberError("");
   };
 
   // Stats cards data
@@ -1408,7 +1440,7 @@ const NewRequest = () => {
                   <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                     {execRestriction.reason === "HOLIDAY" && (
                       <>
-                        Only Senior Executives (Grade A.1–A.3) are allowed on
+                        Only Senior Executives (Grade A.1—A.3) are allowed on
                         public holidays.
                         {execRestriction.holidayName && (
                           <span className="block mt-1 font-semibold">
@@ -1419,10 +1451,10 @@ const NewRequest = () => {
                     )}
 
                     {execRestriction.reason === "WEEKEND" &&
-                      "Only Senior Executives (Grade A.1–A.3) are allowed on during weekends."}
+                      "Only Senior Executives (Grade A.1—A.3) are allowed on during weekends."}
 
                     {execRestriction.reason === "OFF_HOURS" &&
-                      "Only Senior Executives (Grade A.1–A.3) are allowed on outside working hours."}
+                      "Only Senior Executives (Grade A.1—A.3) are allowed on outside working hours."}
                   </p>
                 )}
               </div>
@@ -1506,14 +1538,20 @@ const NewRequest = () => {
                       <input
                         type="text"
                         value={receiverServiceNo}
-                        onChange={(e) => setReceiverServiceNo(e.target.value)}
+                        inputMode="numeric"
+                        maxLength={6}
+                        onChange={(e) =>
+                          setReceiverServiceNo(
+                            e.target.value.replace(/[^0-9]/g, "").slice(0, 6),
+                          )
+                        }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
                             handleSearchReceiver(); // SAME as Search button
                           }
                         }}
-                        placeholder="Enter receiver's service number"
+                        placeholder="Enter receiver's   service number"
                         className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500"
                       />
                       <button
@@ -1572,7 +1610,7 @@ const NewRequest = () => {
                         value={receiverNIC}
                         maxLength={12}
                         onChange={(e) => {
-                          const value = sanitizeNICInput(e.target.value);
+                          const value = e.target.value.replace(/[^0-9]/g, '');
                           setReceiverNIC(value);
                           const error = validateNIC(value);
                           setReceiverNICError(error);
@@ -1625,7 +1663,7 @@ const NewRequest = () => {
                         value={receiverContact}
                         maxLength={12}
                         onChange={(e) => {
-                          const value = sanitizePhoneInput(e.target.value);
+                          const value = e.target.value.replace(/[^0-9]/g, '');
                           setReceiverContact(value);
                           const error = validatePhone(value);
                           setReceiverContactError(error);
@@ -1645,6 +1683,7 @@ const NewRequest = () => {
                     </div>
                   </>
                 )}
+
               </div>
             </div>
           </div>
@@ -1662,10 +1701,11 @@ const NewRequest = () => {
               {/* Out Location */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Out Location (From – Dispatching Branch)
+                  Out Location (From — Dispatching Branch)
                 </label>
                 {/* Out Location */}
                 <select
+                  ref={outLocationSelectRef}
                   value={outLocation}
                   onChange={(e) => setOutLocation(e.target.value)}
                   disabled={!!erpFingerLocation}
@@ -1694,7 +1734,7 @@ const NewRequest = () => {
               {destinationType === "slt" && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    In Location (To – Receiving Branch)
+                    In Location (To — Receiving Branch)
                   </label>
                   {/* In Location */}
                   <select
@@ -1885,13 +1925,17 @@ const NewRequest = () => {
                           const serialNumber = sanitizeSerialNumberInput(
                             e.target.value,
                           );
+                          // Clear all ERP-fetched fields immediately on every keystroke
                           setCurrentItem({
                             ...currentItem,
-                            serialNumber: serialNumber,
+                            serialNumber,
+                            itemCode: "",
+                            itemDescription: "",
+                            itemCategory: "",
+                            categoryDescription: "",
+                            itemFound: false,
                           });
-                          // Validate in real-time while user types
                           setSerialNumberError(validateSerialNumber(serialNumber));
-                          // Auto-lookup after user stops typing (debounced)
                           if (serialNumber.trim()) {
                             clearTimeout(window.serialLookupTimeout);
                             window.serialLookupTimeout = setTimeout(() => {
@@ -2066,7 +2110,12 @@ const NewRequest = () => {
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-600 mb-2">
-                        Item Images (Up to 5)
+                        Item Images{" "}
+                        {currentItem.itemFound ? (
+                          <span className="text-gray-400 font-normal">(optional, max 5)</span>
+                        ) : (
+                          <span className="text-red-500">* (min 2 required, max 5)</span>
+                        )}
                       </label>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {currentItem.images.map((image, idx) => (
@@ -2107,6 +2156,16 @@ const NewRequest = () => {
                           </label>
                         )}
                       </div>
+                      {!currentItem.itemFound && currentItem.images.length < 2 && (
+                        <p className="mt-1 text-xs text-red-500">
+                          {2 - currentItem.images.length} more image{2 - currentItem.images.length > 1 ? "s" : ""} required — serial number not found in ERP
+                        </p>
+                      )}
+                      {currentItem.itemFound && (
+                        <p className="mt-1 text-xs text-green-600">
+                          ✓ Serial found in ERP — images are optional
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex justify-end gap-4 mt-6">

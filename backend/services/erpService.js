@@ -197,10 +197,8 @@ const getEmployeeDetails = async (
   employeeNo,
 ) => {
   try {
-    const response = await erpAxios.post("/GetAllEmployeeDetailsForServiceNo", {
-      organizationID,
-      costCenterCode,
-      employeeNo,
+    const response = await erpAxios.post("/GetEmployeeDetailsByServiceNoOrEmail", {
+      userInput: employeeNo,
     });
     return response.data;
   } catch (error) {
