@@ -22,13 +22,12 @@ import {
 } from "../services/RequestService";
 // Email notifications are handled server-side by backend controllers
 import { useToast } from "../components/ToastProvider.jsx";
-import { jsPDF } from "jspdf";
-import logoUrl from "../assets/SLTMobitel_Logo.png";
 import {
   getCachedUser,
   getCachedUserAllowRefresh,
   setCachedUser,
 } from "../utils/userCache.js";
+import { generateGatePassPdf } from "../utils/gatePassPdf.js";
 import { useAutoRefetch } from "../hooks/useRealtimeUpdates.js";
 import {
   validateRequired,
@@ -287,318 +286,7 @@ const Receive = () => {
       .toString()
       .trim()
       .toLowerCase()
-      .replace(/\u2013|\u2014|—|—/g, "-") // normalize fancy dashes to plain
-      .replace(/\s+/g, " "); // collapse whitespace
-
-  // Real-time updates for Receive page (status: 6 = Receiver Pending)
-  // Optimized: backend now returns enriched data with all user details
-  useAutoRefetch(
-    async () => {
-      if (activeTab !== "pending" || !userDetails?.serviceNo) return;
-
-      try {
-        const data = await getPendingStatuses(
-          isSuper ? undefined : userDetails?.serviceNo,
-        );
-
-        const withRequest = (Array.isArray(data) ? data : []).filter(
-          (s) => s && s.request,
-        );
-
-        // Backend now enriches with user data, so we just format for display
-        const formatted = withRequest.map((status) => {
-          const req = status.request || {};
-
-          // Use server-provided enriched data (fallback to manual lookup if needed)
-          const senderDetails = status.senderDetails || {
-            serviceNo: req.employeeServiceNo,
-            name: "N/A",
-            section: "N/A",
-            group: "N/A",
-            designation: "N/A",
-            contactNo: "N/A",
-          };
-
-          const receiverDetails =
-            status.receiverDetails ||
-            ensureReceiverDetails(null, req.receiverServiceNo, req);
-
-          return {
-            refNo: status.referenceNumber,
-            senderDetails,
-            receiverDetails,
-            transportData: req.transport,
-            loadingDetails: req.loading || {},
-            inLocation: req.inLocation,
-            outLocation: req.outLocation,
-            createdAt: fmtDate(
-              status?.createdAt ||
-                status?.updatedAt ||
-                req?.updatedAt ||
-                req?.createdAt,
-            ),
-            items: req.items || [],
-            comment: status.comment,
-            requestDetails: { ...req },
-            loadUserData: status.loadingStaffDetails,
-            unLoadUserData: status.unloadingStaffDetails,
-            statusDetails: status,
-            receiveOfficerData: status.receiveOfficerDetails,
-            executiveOfficerData: status.executiveOfficerDetails,
-            verifyOfficerData: status.verifyOfficerDetails,
-          };
-        });
-
-        const uniqueDESCRIPTIONs = formatted.reduce((acc, item) => {
-          const existing = acc.find((x) => x.refNo === item.refNo);
-          if (!existing) {
-            acc.push(item);
-          } else {
-            const existingDate = new Date(existing.createdAt);
-            const currentDate = new Date(item.createdAt);
-            if (currentDate > existingDate) {
-              const index = acc.findIndex((x) => x.refNo === item.refNo);
-              acc[index] = item;
-            }
-          }
-          return acc;
-        }, []);
-
-        setPendingDESCRIPTIONs(uniqueDESCRIPTIONs);
-      } catch (error) {
-        console.error("Error fetching pending statuses:", error);
-        setPendingDESCRIPTIONs([]);
-      }
-    },
-    [activeTab, userDetails?.serviceNo, userDetails?.branches],
-    { status: 6 }, // Receiver pending requests
-  );
-
-  // Fetch Pending items - Now handled by useAutoRefetch hook above
-
-  useEffect(() => {
-    const loadAll = async () => {
-      if (!userDetails?.serviceNo) return;
-
-      try {
-        // Fetch and format pending items - optimized with server-side enrichment
-        if (activeTab === "pending") {
-          const data = await getPendingStatuses(
-            isSuper ? undefined : userDetails?.serviceNo,
-          );
-
-          const withRequest = (Array.isArray(data) ? data : []).filter(
-            (s) => s && s.request,
-          );
-
-          // Backend now enriches with user data, so we just format for display
-          const formatted = withRequest.map((status) => {
-            const req = status.request || {};
-
-            const senderDetails = status.senderDetails || {
-              serviceNo: req.employeeServiceNo,
-              name: "N/A",
-              section: "N/A",
-              group: "N/A",
-              designation: "N/A",
-              contactNo: "N/A",
-            };
-
-            const receiverDetails =
-              status.receiverDetails ||
-              ensureReceiverDetails(null, req.receiverServiceNo, req);
-
-            return {
-              refNo: status.referenceNumber,
-              senderDetails,
-              receiverDetails,
-              transportData: req.transport,
-              loadingDetails: req.loading || {},
-              inLocation: req.inLocation,
-              outLocation: req.outLocation,
-              createdAt: fmtDate(
-                status?.createdAt ||
-                  status?.updatedAt ||
-                  req?.updatedAt ||
-                  req?.createdAt,
-              ),
-              items: req.items || [],
-              comment: status.comment,
-              requestDetails: { ...req },
-              loadUserData: status.loadingStaffDetails,
-              unLoadUserData: status.unloadingStaffDetails,
-              statusDetails: status,
-              receiveOfficerData: status.receiveOfficerDetails,
-              executiveOfficerData: status.executiveOfficerDetails,
-              verifyOfficerData: status.verifyOfficerDetails,
-            };
-          });
-
-          const uniqueDESCRIPTIONs = formatted.reduce((acc, item) => {
-            const existing = acc.find((x) => x.refNo === item.refNo);
-            if (!existing) {
-              acc.push(item);
-            } else {
-              const existingDate = new Date(existing.createdAt);
-              const currentDate = new Date(item.createdAt);
-              if (currentDate > existingDate) {
-                const index = acc.findIndex((x) => x.refNo === item.refNo);
-                acc[index] = item;
-              }
-            }
-            return acc;
-          }, []);
-
-          setPendingDESCRIPTIONs(uniqueDESCRIPTIONs);
-        }
-
-        // approved - optimized with server-side enrichment
-        const approvedData = await getApprovedStatuses(
-          isSuper ? undefined : userDetails?.serviceNo,
-        );
-
-        const approvedFormatted = (approvedData || [])
-          .filter((s) => s && s.request)
-          .map((status) => {
-            const req = status.request || {};
-
-            const senderDetails = status.senderDetails || {
-              serviceNo: req.employeeServiceNo,
-              name: "N/A",
-              section: "N/A",
-              group: "N/A",
-              designation: "N/A",
-              contactNo: "N/A",
-            };
-
-            const receiverDetails =
-              status.receiverDetails ||
-              ensureReceiverDetails(null, req.receiverServiceNo, req);
-
-            return {
-              refNo: status.referenceNumber,
-              senderDetails,
-              receiverDetails,
-              transportData: req.transport,
-              loadingDetails: req.loading || {},
-              inLocation: req.inLocation,
-              outLocation: req.outLocation,
-              createdAt: fmtDate(
-                status?.createdAt ||
-                  status?.updatedAt ||
-                  req?.updatedAt ||
-                  req?.createdAt,
-              ),
-              items: req.items || [],
-              comment: status.comment,
-              requestDetails: { ...req },
-              loadUserData: status.loadingStaffDetails,
-              unLoadUserData: status.unloadingStaffDetails,
-              statusDetails: status,
-              receiveOfficerData: status.receiveOfficerDetails,
-              executiveOfficerData: status.executiveOfficerDetails,
-              verifyOfficerData: status.verifyOfficerDetails,
-            };
-          });
-
-        // Remove duplicates by reference number (keep the most recent one)
-        const uniqueApproved = approvedFormatted.reduce((acc, item) => {
-          const existing = acc.find((x) => x.refNo === item.refNo);
-          if (!existing) {
-            acc.push(item);
-          } else {
-            const existingDate = new Date(existing.createdAt);
-            const currentDate = new Date(item.createdAt);
-            if (currentDate > existingDate) {
-              const index = acc.findIndex((x) => x.refNo === item.refNo);
-              acc[index] = item;
-            }
-          }
-          return acc;
-        }, []);
-
-        setApprovedDESCRIPTIONs(uniqueApproved);
-
-        // rejected - optimized with server-side enrichment
-        const rejectedData = await getRejectedStatuses(
-          isSuper ? undefined : userDetails?.serviceNo,
-        );
-
-        const rejectedFormatted = (rejectedData || [])
-          .filter((s) => s && s.request)
-          .map((status) => {
-            const req = status.request || {};
-
-            const senderDetails = status.senderDetails || {
-              serviceNo: req.employeeServiceNo,
-              name: "N/A",
-              section: "N/A",
-              group: "N/A",
-              designation: "N/A",
-              contactNo: "N/A",
-            };
-
-            const receiverDetails =
-              status.receiverDetails ||
-              ensureReceiverDetails(null, req.receiverServiceNo, req);
-
-            return {
-              refNo: status.referenceNumber,
-              senderDetails,
-              receiverDetails,
-              transportData: req.transport,
-              loadingDetails: req.loading || {},
-              inLocation: req.inLocation,
-              outLocation: req.outLocation,
-              createdAt: fmtDate(
-                status?.createdAt ||
-                  status?.updatedAt ||
-                  req?.updatedAt ||
-                  req?.createdAt,
-              ),
-              items: req.items || [],
-              comment: status.comment,
-              requestDetails: { ...req },
-              loadUserData: status.loadingStaffDetails,
-              unLoadUserData: status.unloadingStaffDetails,
-              statusDetails: status,
-              receiveOfficerData: status.receiveOfficerDetails,
-              executiveOfficerData: status.executiveOfficerDetails,
-              verifyOfficerData: status.verifyOfficerDetails,
-              rejectedBy: status.rejectedBy,
-              rejectedByServiceNo: status.rejectedByServiceNo,
-            };
-          });
-
-        setRejectedDESCRIPTIONs(rejectedFormatted);
-      } catch (err) {
-        console.error("Receiver data load error:", err);
-      }
-    };
-
-    loadAll();
-  }, [userDetails?.serviceNo, userDetails?.branches, refetchTrigger]);
-
-  const StatusPill = ({ status }) => {
-    const styles = {
-      pending: "bg-amber-100 text-amber-800",
-      approved: "bg-emerald-100 text-emerald-800",
-      rejected: "bg-rose-100 text-rose-800",
-    };
-    return (
-      <span
-        className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${styles[status]}`}
-      >
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
-
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem("user") || "{}");
-    setUserDetails(userData);
-    setUser(userData); // keep user in sync if other code references it
-  }, []); // run once on mount
+      .replace(/\u2013|\u2014|—|—/g, "-"); // normalize fancy dashes to plain
 
   const handleApprove = async (item) => {
     if (isSuper) {
@@ -1036,8 +724,133 @@ const Receive = () => {
   const filteredApprovedDESCRIPTIONs = applyFilters(approvedDESCRIPTIONs);
   const filteredRejectedDESCRIPTIONs = applyFilters(rejectedDESCRIPTIONs);
 
+  // Helper functions used by the UI below
+  const printReport = (
+    request,
+    transporterDetails,
+    loadingStaff,
+    selectedReturnableDESCRIPTIONs,
+  ) => {
+    return generateGatePassPdf(
+      {
+        ...request,
+        senderDetails: request.senderDetails || request.loadUserData || request.unLoadUserData,
+        receiverDetails: request.receiverDetails || receiver,
+        transportData: request.transportData || request.transport,
+        requestDetails: request.requestDetails || request,
+      },
+      {
+        title: "SLT Gate Pass - Receive Report",
+        subtitle: "Received request summary with loading, unloading, and item details",
+        senderFallback: request.loadUserData || request.unLoadUserData || request.senderDetails,
+        receiverFallback: receiver,
+        transporterDetails,
+        fileNamePrefix: "SLT_GatePass_Receive",
+        extraSections: [
+          {
+            title: "Loading Details",
+            rows: [
+              {
+                label: "Loading Location",
+                value:
+                  request?.requestDetails?.loading?.loadingLocation ||
+                  request?.request?.loading?.loadingLocation ||
+                  request?.loading?.loadingLocation,
+              },
+              {
+                label: "Loading Time",
+                value:
+                  request?.requestDetails?.loading?.loadingTime ||
+                  request?.request?.loading?.loadingTime ||
+                  request?.loading?.loadingTime,
+              },
+              {
+                label: "Staff Type",
+                value:
+                  request?.requestDetails?.loading?.staffType ||
+                  request?.request?.loading?.staffType ||
+                  request?.loading?.staffType,
+              },
+              {
+                label: "Staff Service No",
+                value:
+                  request?.requestDetails?.loading?.staffServiceNo ||
+                  request?.request?.loading?.staffServiceNo ||
+                  request?.loading?.staffServiceNo,
+              },
+            ],
+            accentColor: [58, 104, 188],
+          },
+          {
+            title: "Unloading Details",
+            rows: [
+              {
+                label: "Loading Location",
+                value:
+                  request?.requestDetails?.unLoading?.loadingLocation ||
+                  request?.request?.unLoading?.loadingLocation ||
+                  request?.unLoading?.loadingLocation,
+              },
+              {
+                label: "Loading Time",
+                value:
+                  request?.requestDetails?.unLoading?.loadingTime ||
+                  request?.request?.unLoading?.loadingTime ||
+                  request?.unLoading?.loadingTime,
+              },
+              {
+                label: "Staff Type",
+                value:
+                  request?.requestDetails?.unLoading?.staffType ||
+                  request?.request?.unLoading?.staffType ||
+                  request?.unLoading?.staffType,
+              },
+              {
+                label: "Staff Service No",
+                value:
+                  request?.requestDetails?.unLoading?.staffServiceNo ||
+                  request?.request?.unLoading?.staffServiceNo ||
+                  request?.unLoading?.staffServiceNo,
+              },
+            ],
+            accentColor: [20, 137, 126],
+          },
+          {
+            title: "Selected Returnable Items",
+            rows: (selectedReturnableDESCRIPTIONs || []).map((item, index) => ({
+              label: `Item ${index + 1}`,
+              value: `${item?.itemDescription || "-"} | Serial: ${item?.serialNumber || "-"} | Qty: ${item?.returnQuantity || item?.itemQuantity || "-"}`,
+            })),
+            accentColor: [146, 87, 214],
+          },
+        ],
+      },
+    );
+  };
+
+  const generateitemDetailsPDF = (fullRequest) => {
+    return generateGatePassPdf(
+      {
+        ...fullRequest,
+        senderDetails: fullRequest.senderDetails || fullRequest.sender,
+        receiverDetails: fullRequest.receiverDetails || fullRequest.receiver,
+        transportData: fullRequest.transportData || fullRequest.transport,
+        requestDetails: fullRequest.requestDetails || fullRequest,
+      },
+      {
+        title: "SLT Gate Pass - Item Report",
+        subtitle: "Decorated item, receiver, and transport summary",
+        senderFallback: fullRequest.senderDetails || fullRequest.sender,
+        receiverFallback: fullRequest.receiverDetails || fullRequest.receiver,
+        transporterDetails,
+        fileNamePrefix: "SLT_GatePass_ReceiveItems",
+      },
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 p-8">
+    <div>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 p-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -1459,6 +1272,7 @@ const Receive = () => {
         // user={user}
         // receiver={receiver}
       />
+      </div>
     </div>
   );
 };
@@ -1872,1156 +1686,35 @@ const RequestDetailsModal = ({
     setEditValues({ itemCode: "", serialNo: "" });
   };
 
-  // Print function
-  const printReport = (
-    request,
-    transporterDetails,
-    loadingStaff,
-    selectedReturnableDESCRIPTIONs,
-  ) => {
-    // Create a temporary iframe to hold the printable content
-    const printFrame = document.createElement("iframe");
-    printFrame.style.position = "absolute";
-    printFrame.style.top = "-9999px";
-    document.body.appendChild(printFrame);
-
-    const contentDocument = printFrame.contentDocument;
-
-    // Create the print content with styling
-    contentDocument.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>SLT Gate Pass - ${request.refNo}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            color: #333;
-          }
-          .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-          }
-          .logo {
-            max-height: 60px;
-            margin-bottom: 10px;
-          }
-          .title {
-            font-size: 24px;
-            color: #003399;
-            margin: 0;
-          }
-          .ref {
-            font-size: 14px;
-            color: #666;
-            margin: 5px 0;
-          }
-          .date {
-            font-size: 12px;
-            color: #888;
-            margin: 5px 0 15px;
-          }
-          .section {
-            margin-bottom: 20px;
-          }
-          .section-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #eee;
-          }
-          .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-          }
-          .item {
-            margin-bottom: 5px;
-          }
-          .itemComm{
-            margin-bottom: 40px;
-          }
-          .label {
-            font-weight: bold;
-            color: #555;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-          }
-          th, td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-          }
-          th {
-            background-color: #f5f5f5;
-            font-weight: bold;
-          }
-          .signature-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 20px;
-            margin-top: 40px;
-          }
-          .signature-box {
-            height: 70px;
-            border-bottom: 1px solid #ccc;
-          }
-          .signature-title {
-            text-align: center;
-            font-weight: bold;
-            margin-top: 5px;
-          }
-          .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 10px;
-            color: #999;
-          }
-          @media print {
-            body {
-              margin: 0;
-              padding: 15px;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <img src=${logoUrl} alt="SLT Logo" class="logo" />
-          <h1 class="title">SLT Gate Pass</h1>
-          <p class="ref">Reference: ${request.refNo}</p>
-          <p class="date">Generated on: ${new Date().toLocaleDateString()}</p>
-        </div>
-        
-        <div class="section">
-          <h2 class="section-title">Sender Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.unLoadUserData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.unLoadUserData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.senderDetails?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.senderDetails?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.senderDetails?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.senderDetails?.contactNo || "N/A"
-              }
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <h2 class="section-title">Receiver Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.receiverDetails?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.receiverDetails?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.receiverDetails?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.receiverDetails?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.receiverDetails?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.receiverDetails?.contactNo || "N/A"
-              }
-            </div>
-          </div>
-        </div>
-        
-        <div class="section">
-          <h2 class="section-title">Location Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">From:</span> ${request.outLocation || "N/A"}
-            </div>
-            <div class="item">
-              <span class="label">To:</span> ${request.inLocation || "N/A"}
-            </div>
-          </div>
-        </div>
-        
-        <div class="section">
-          <h2 class="section-title">Transport Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Method:</span> ${
-                request?.transportData?.transportMethod || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Type:</span> ${
-                request?.transportData?.transporterType || "N/A"
-              }
-            </div>
-            ${
-              request?.transportData?.transporterType === "SLT"
-                ? `
-              
-            <div class="item">
-              <span class="label">Transporter:</span> ${
-                transporterDetails?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                transporterDetails?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                transporterDetails?.contactNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                transporterDetails?.section || "N/A"
-              }
-            </div>
-            
-            ${
-              request?.transportData?.transportMethod === "Vehicle"
-                ? `
-            <div class="item">
-              <span class="label">Vehicle No:</span> ${
-                request?.requestDetails?.vehicleNumber || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Vehicle Item Code:</span> ${
-                request?.requestDetails?.vehicleModel || "N/A"
-              }
-            </div>
-            `
-                : ""
-            } 
-            `
-                : `
-            <div class="item">
-              <span class="label">Transporter:</span> ${
-                request?.transportData?.nonSLTTransporterName || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request?.transportData?.nonSLTTransporterEmail || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request?.transportData?.nonSLTTransporterNIC || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request?.transportData?.nonSLTTransporterPhone || "N/A"
-              }
-            </div>
-            
-            ${
-              request?.transportData?.transportMethod === "Vehicle"
-                ? `
-            <div class="item">
-              <span class="label">Vehicle No:</span> ${
-                request?.requestDetails?.vehicleNumber || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Vehicle Item Code:</span> ${
-                request?.requestDetails?.vehicleModel || "N/A"
-              }
-            </div>
-            `
-                : ""
-            }
-            `
-            }
-          </div>
-        </div>
-
-        <div class="section">
-          <h2 class="section-title">Exerctive Officer Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.executiveOfficerData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.executiveOfficerData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.executiveOfficerData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.executiveOfficerData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.executiveOfficerData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.executiveOfficerData?.contactNo || "N/A"
-              }
-            </div>
-            <div class="itemComm">
-              <span class="label">Exerctive Officer Comment:</span> ${
-                request.statusDetails?.executiveOfficerComment || "N/A"
-              }
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <h2 class="section-title">Verify Officer Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.verifyOfficerData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.verifyOfficerData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.verifyOfficerData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.verifyOfficerData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.verifyOfficerData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.verifyOfficerData?.contactNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Verify Officer Comment:</span> ${
-                request.statusDetails?.verifyOfficerComment || "N/A"
-              }
-            </div>
-          </div>
-        </div>
-        
-        <!-- Loading Details Section -->
-    <div class="section">
-      <h2 class="section-title">Loading Details</h2>
-      <div class="grid">
-        <div class="item">
-          <span class="label">Loading Location:</span> ${
-            request?.requestDetails?.loading?.loadingLocation ||
-            request?.request?.loading?.loadingLocation ||
-            request?.loading?.loadingLocation ||
-            "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Loading Time:</span> ${
-            request?.requestDetails?.loading?.loadingTime ||
-            request?.request?.loading?.loadingTime ||
-            request?.loading?.loadingTime
-              ? new Date(
-                  request?.requestDetails?.loading?.loadingTime ||
-                    request?.request?.loading?.loadingTime ||
-                    request?.loading?.loadingTime,
-                ).toLocaleString()
-              : "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Staff Type:</span> ${
-            request?.requestDetails?.loading?.staffType ||
-            request?.request?.loading?.staffType ||
-            request?.loading?.staffType ||
-            "N/A"
-          }
-        </div>
-        
-        ${
-          (request?.requestDetails?.loading?.staffType ||
-            request?.request?.loading?.staffType ||
-            request?.loading?.staffType) === "SLT"
-            ? `
-          <div class="item">
-            <span class="label">Staff Service No:</span> ${
-              request?.requestDetails?.loading?.staffServiceNo ||
-              request?.request?.loading?.staffServiceNo ||
-              request?.loading?.staffServiceNo ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-              <span class="label">Name:</span> ${
-                request.loadUserData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.loadUserData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.loadUserData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.loadUserData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.loadUserData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.loadUserData?.contactNo || "N/A"
-              }
-            </div>
-        `
-            : `
-          <div class="item">
-            <span class="label">Staff Name:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffName || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Company:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffCompany || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">NIC:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffNIC || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Contact:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffContact || "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Email:</span> ${
-              request?.requestDetails?.loading?.nonSLTStaffEmail || "N/A"
-            }
-          </div>
-        `
-        }
-      </div>
-    </div>
-
-    <div class="section">
-          <h2 class="section-title">Receive Officer Details</h2>
-          <div class="grid">
-            <div class="item">
-              <span class="label">Name:</span> ${
-                request.receiveOfficerData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.receiveOfficerData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.receiveOfficerData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.receiveOfficerData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.receiveOfficerData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.receiveOfficerData?.contactNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Receive Officer Comment:</span> ${
-                request.statusDetails?.recieveOfficerComment || "N/A"
-              }
-            </div>
-          </div>
-        </div>
-        
-        <!-- Loading Details Section -->
-    <div class="section">
-      <h2 class="section-title">Unloading Details</h2>
-      <div class="grid">
-        <div class="item">
-          <span class="label">Loading Location:</span> ${
-            request?.requestDetails?.unLoading?.loadingLocation ||
-            request?.request?.unLoading?.loadingLocation ||
-            request?.unLoading?.loadingLocation ||
-            "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Loading Time:</span> ${
-            request?.requestDetails?.unLoading?.loadingTime ||
-            request?.request?.unLoading?.loadingTime ||
-            request?.unLoading?.loadingTime
-              ? new Date(
-                  request?.requestDetails?.unLoading?.loadingTime ||
-                    request?.request?.unLoading?.loadingTime ||
-                    request?.unLoading?.loadingTime,
-                ).toLocaleString()
-              : "N/A"
-          }
-        </div>
-        <div class="item">
-          <span class="label">Staff Type:</span> ${
-            request?.requestDetails?.unLoading?.staffType ||
-            request?.request?.unLoading?.staffType ||
-            request?.unLoading?.staffType ||
-            "N/A"
-          }
-        </div>
-        
-        ${
-          (request?.requestDetails?.unLoading?.staffType ||
-            request?.request?.unLoading?.staffType ||
-            request?.unLoading?.staffType) === "SLT"
-            ? `
-          <div class="item">
-            <span class="label">Staff Service No:</span> ${
-              request?.requestDetails?.unLoading?.staffServiceNo ||
-              request?.request?.unLoading?.staffServiceNo ||
-              request?.unLoading?.staffServiceNo ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-              <span class="label">Name:</span> ${
-                request.unLoadUserData?.name || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Service No:</span> ${
-                request.unLoadUserData?.serviceNo || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Section:</span> ${
-                request.unLoadUserData?.section || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Group:</span> ${
-                request.unLoadUserData?.group || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Designation:</span> ${
-                request.unLoadUserData?.designation || "N/A"
-              }
-            </div>
-            <div class="item">
-              <span class="label">Contact:</span> ${
-                request.unLoadUserData?.contactNo || "N/A"
-              }
-            </div>
-        `
-            : `
-          <div class="item">
-            <span class="label">Staff Name:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffName ||
-              request?.request?.unLoading?.nonSLTStaffName ||
-              request?.unLoading?.nonSLTStaffName ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Company:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffCompany ||
-              request?.request?.unLoading?.nonSLTStaffCompany ||
-              request?.unLoading?.nonSLTStaffCompany ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">NIC:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffNIC ||
-              request?.request?.unLoading?.nonSLTStaffNIC ||
-              request?.unLoading?.nonSLTStaffNIC ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Contact:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffContact ||
-              request?.request?.unLoading?.nonSLTStaffContact ||
-              request?.unLoading?.nonSLTStaffContact ||
-              "N/A"
-            }
-          </div>
-          <div class="item">
-            <span class="label">Email:</span> ${
-              request?.requestDetails?.unLoading?.nonSLTStaffEmail || "N/A"
-            }
-          </div>
-        `
-        }
-      </div>
-    </div>
-
-        <div class="section">
-          <h2 class="section-title">items</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>item Name</th>
-                <th>Serial Number</th>
-                <th>Category</th>
-                <th>Quantity</th>
-                <th>Item Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(request.items || [])
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item?.itemDescription || "-"}</td>
-                  <td>${item?.serialNumber || "-"}</td>
-                  <td>${item?.categoryDescription || "-"}</td>
-                  <td>${item?.itemQuantity || "-"}</td>
-                  <td>${item?.itemCode || "-"}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="section">
-      <h2 class="section-title">Selected Returnable items</h2>
-      ${
-        request?.requestDetails?.returnableDESCRIPTIONs || []
-          ? `<table>
-            <thead>
-              <tr>
-                <th>item Name</th>
-                <th>Serial Number</th>
-                <th>Category</th>
-                <th>Return Quantity</th>
-                <th>Item Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(request?.requestDetails?.returnableDESCRIPTIONs || [])
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item?.itemDescription || "-"}</td>
-                  <td>${item?.serialNumber || "-"}</td>
-                  <td>${item?.categoryDescription || "-"}</td>
-                  <td>${item?.returnQuantity || item?.itemQuantity || "-"}</td>
-                  <td>${item?.itemCode || "-"}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>`
-          : "<p>No returnable items selected</p>"
-      }
-    </div>
-        
-        
-        <div class="footer">
-          This is an electronically generated document and does not require signature.
-        </div>
-      </body>
-      </html>
-    `);
-
-    contentDocument.close();
-
-    // Wait for content to load then print
-    printFrame.onload = function () {
-      printFrame.contentWindow.focus();
-      printFrame.contentWindow.print();
-
-      // Remove the iframe after printing
-      setTimeout(() => {
-        document.body.removeChild(printFrame);
-      }, 1000);
-    };
-  };
-
-  const generateitemDetailsPDF = (fullRequest) => {
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 36;
-    const usableWidth = pageWidth - margin * 2;
-    const lh = 12;
-    const palette = {
-      navy: [20, 55, 120],
-      slate: [78, 92, 115],
-      headingBg: [240, 245, 255],
-      border: [210, 218, 230],
-      tableHeader: [226, 234, 247],
-      text: [33, 37, 41],
-      rowAlt: [249, 251, 255],
-    };
-
-    const addHeader = () => {
-      try {
-        doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
-      } catch (e) {
-        // ignore logo rendering issues
-      }
-
-      doc.setDrawColor(...palette.navy);
-      doc.setLineWidth(1.1);
-      // reduced gap under the reference number
-      doc.line(margin, 64, pageWidth - margin, 64);
-
-      doc.setFontSize(17);
-      doc.setTextColor(...palette.navy);
-      doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
-        align: "center",
-      });
-
-      doc.setFontSize(9);
-      doc.setTextColor(...palette.slate);
-      doc.text("Official Item Movement Record", pageWidth / 2, 46, {
-        align: "center",
-      });
-
-      doc.setFontSize(9);
-      doc.setTextColor(...palette.slate);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
-        align: "right",
-      });
-
-      doc.setFontSize(10);
-      doc.setTextColor(...palette.text);
-      const refText = `Reference: ${fullRequest.referenceNumber || fullRequest.refNo || "-"}`;
-      doc.text(refText, pageWidth / 2, 58, { align: "center" });
-    };
-
-    const ensurePage = (neededHeight) => {
-      if (currentY + neededHeight > pageHeight - margin - 22) {
-        doc.addPage();
-        addHeader();
-        currentY = 84;
-      }
-    };
-
-    const drawKeyValueBox = (title, fields) => {
-      const titleH = 18;
-      const valueMaxWidth = usableWidth * 0.62;
-      const rows = fields.map((f) => {
-        const valueLines = doc.splitTextToSize(String(f[1] || "-"), valueMaxWidth);
-        const rowHeight = Math.max(18, valueLines.length * lh + 6);
-        return { key: f[0], valueLines, rowHeight };
-      });
-      const contentHeight = rows.reduce((sum, r) => sum + r.rowHeight, 0);
-
-      ensurePage(titleH + contentHeight + 18);
-
-      doc.setFillColor(...palette.headingBg);
-      doc.setDrawColor(...palette.border);
-      doc.rect(margin, currentY, usableWidth, titleH, "FD");
-
-      doc.setFontSize(10.5);
-      doc.setTextColor(...palette.navy);
-      doc.text(title, margin + 8, currentY + 12);
-
-      let rowTop = currentY + titleH;
-      rows.forEach((row, idx) => {
-        if (idx % 2 === 1) {
-          doc.setFillColor(...palette.rowAlt);
-          doc.rect(margin, rowTop, usableWidth, row.rowHeight, "F");
-        }
-
-        doc.setFontSize(9);
-        doc.setTextColor(...palette.slate);
-        doc.text(String(row.key || "-"), margin + 8, rowTop + 12);
-
-        doc.setTextColor(...palette.text);
-        row.valueLines.forEach((line, lineIdx) => {
-          doc.text(line, margin + usableWidth * 0.34 + 8, rowTop + 12 + lineIdx * lh);
-        });
-
-        doc.setDrawColor(...palette.border);
-        doc.setLineWidth(0.4);
-        doc.line(margin, rowTop + row.rowHeight, margin + usableWidth, rowTop + row.rowHeight);
-        rowTop += row.rowHeight;
-      });
-
-      doc.rect(margin, currentY, usableWidth, titleH + contentHeight);
-      currentY = rowTop + 12;
-    };
-
-    addHeader();
-    let currentY = 84;
-
-    const formatDateValue = (dateValue) => {
-      if (!dateValue) return "-";
-      const dateObj = new Date(dateValue);
-      if (Number.isNaN(dateObj.getTime())) return String(dateValue);
-      return dateObj.toLocaleDateString();
-    };
-
-    const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
-    const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
-    const senderInfo =
-      fullRequest.senderDetails || fullRequest.sender || requestCore.senderDetails || {};
-
-    drawKeyValueBox("Sender Details", [
-      ["Name", senderInfo.name || senderInfo.displayName || "-"],
-      ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || fullRequest.senderServiceNo || "-"],
-      ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
-      ["Section", senderInfo.section || senderInfo.department || "-"],
-      ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
-      ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
-    ]);
-
-    if (!items.length) {
-      drawKeyValueBox("Item Details", [["Items", "No items available"]]);
-    } else {
-      items.forEach((it, idx) => {
-        const itemFields = [
-          ["Description", it.itemDescription || it.description || "-"],
-          ["Serial No", it.serialNumber || "-"],
-          ["Item Code", it.itemCode || "-"],
-          ["Category", it.categoryDescription || it.category || "-"],
-          ["Quantity", String(it.itemQuantity || it.quantity || "-")],
-          ["Status", it.status || "-"],
-        ];
-
-        const isReturnable =
-          it.itemReturnable ||
-          it.isReturnable ||
-          String(it.status || "").toLowerCase() === "return to sender" ||
-          String(it.status || "").toLowerCase() === "returnable";
-
-        if (isReturnable) {
-          itemFields.push([
-            "Return Date",
-            formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
-          ]);
-        }
-
-        drawKeyValueBox(`Item Details - Item ${idx + 1}`, itemFields);
-      });
-    }
-
-    const hdrH = 20;
-    const returnableItems = items.filter(
-      (it) => it.itemReturnable || it.isReturnable || it.status === "return to Sender",
-    );
-    if (returnableItems.length > 0) {
-      ensurePage(30 + 40);
-      doc.setFontSize(10.5);
-      doc.setTextColor(...palette.navy);
-      doc.text("Returnable Items", margin, currentY);
-      currentY += 14;
-
-      const retCols = ["Description", "Serial No", "Item Code", "Category", "Qty", "Return Date"];
-      const retColW = [usableWidth * 0.28, usableWidth * 0.14, usableWidth * 0.12, usableWidth * 0.12, usableWidth * 0.09, usableWidth * 0.25];
-      const retColX = [margin];
-      for (let i = 1; i < retColW.length; i++) retColX[i] = retColX[i - 1] + retColW[i - 1];
-
-      doc.setFillColor(...palette.tableHeader);
-      doc.setDrawColor(...palette.border);
-      doc.rect(margin, currentY, usableWidth, hdrH, "FD");
-      doc.setFontSize(9);
-      doc.setTextColor(...palette.navy);
-      retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
-      currentY += hdrH + 6;
-
-      returnableItems.forEach((it, idx) => {
-        const desc = it.itemDescription || it.description || "-";
-        const descLines = doc.splitTextToSize(desc, retColW[0] - 8);
-        const rowH = Math.max(20, descLines.length * lh + 6);
-
-        if (currentY + rowH > pageHeight - margin) {
-          doc.addPage();
-          addHeader();
-          currentY = 116;
-          doc.setFillColor(...palette.tableHeader);
-          doc.setDrawColor(...palette.border);
-          doc.rect(margin, currentY, usableWidth, hdrH, "FD");
-          doc.setFontSize(9);
-          doc.setTextColor(...palette.navy);
-          retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
-          currentY += hdrH + 6;
-        }
-
-        if (idx % 2 === 1) {
-          doc.setFillColor(...palette.rowAlt);
-          doc.rect(margin, currentY - 2, usableWidth, rowH + 4, "F");
-        }
-        doc.setDrawColor(...palette.border);
-        doc.rect(margin, currentY - 2, usableWidth, rowH + 4);
-
-        doc.setFontSize(9);
-        doc.setTextColor(...palette.text);
-        descLines.forEach((ln, li) => doc.text(ln, retColX[0] + 4, currentY + 10 + li * lh));
-        doc.text(it.serialNumber || "-", retColX[1] + 4, currentY + 12);
-        doc.text(it.itemCode || "-", retColX[2] + 4, currentY + 12);
-        doc.text(it.categoryDescription || it.category || "-", retColX[3] + 4, currentY + 12);
-        doc.text(String(it.itemQuantity || it.quantity || "-"), retColX[4] + 4, currentY + 12);
-        doc.text(
-          formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
-          retColX[5] + 4,
-          currentY + 12,
-        );
-
-        currentY += rowH + 8;
-      });
-      currentY += 4;
-    }
-
-    const isNonSltDestination = fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
-
-    drawKeyValueBox("Location Details", [
-      [
-        "Out Location",
-        fullRequest.outLocation ||
-          requestCore.outLocation ||
-          fullRequest.companyName ||
-          requestCore.companyName ||
-          "-",
-      ],
-      ["In Location", fullRequest.inLocation || requestCore.inLocation || "-"],
-    ]);
-
-    const recv = fullRequest.receiver || fullRequest.receiverDetails || receiver || {
-      name: requestCore.receiverName || fullRequest.receiverName || "-",
-      nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
-      contactNo: requestCore.receiverContact || fullRequest.receiverContact || "-",
-      serviceNo: requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
-      group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
-      companyName: requestCore.companyName || fullRequest.companyName || "-",
-    };
-
-    if (isNonSltDestination) {
-      drawKeyValueBox("Receiver Details", [
-        ["Name", recv.name || requestCore.receiverName || "-"],
-        ["Company", fullRequest.companyName || requestCore.companyName || recv.companyName || "-"],
-        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
-        ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
-      ]);
-    } else {
-      drawKeyValueBox("Receiver Details", [
-        ["Name", recv.name || requestCore.receiverName || "-"],
-        ["Service No", recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-"],
-        ["Group", recv.group || requestCore.receiverGroup || "-"],
-        ["Section", recv.section || requestCore.receiverSection || "-"],
-        ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
-        ["Contact", recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-"],
-      ]);
-    }
-
-    const t = fullRequest.transport || fullRequest.transportData || requestCore.transport || {};
-
-    const transportRows = [
-      ["Transport Method", t.transportMethod || "-"],
-      ["Transporter Type", t.transporterType || "-"],
-    ];
-
-    if (String(t.transporterType || "").toUpperCase() === "SLT") {
-      transportRows.push(["Service No", t.transporterServiceNo || requestCore.transporterServiceNo || "-"]);
-      transportRows.push(["Name", transporterDetails?.name || t.transporterName || requestCore.transporterName || "-"]);
-      transportRows.push(["Section", transporterDetails?.section || t.transporterSection || requestCore.transporterSection || "-"]);
-      transportRows.push(["Group", transporterDetails?.group || t.transporterGroup || requestCore.transporterGroup || "-"]);
-      transportRows.push(["Designation", transporterDetails?.designation || t.transporterDesignation || requestCore.transporterDesignation || "-"]);
-      transportRows.push(["Contact", transporterDetails?.contactNo || t.transporterContact || requestCore.transporterContact || "-"]);
-    } else {
-      transportRows.push(["Name", t.nonSLTTransporterName || requestCore.nonSLTTransporterName || "-"]);
-      transportRows.push(["NIC", t.nonSLTTransporterNIC || requestCore.nonSLTTransporterNIC || "-"]);
-      transportRows.push(["Contact", t.nonSLTTransporterPhone || requestCore.nonSLTTransporterPhone || "-"]);
-      transportRows.push(["Email", t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-"]);
-    }
-
-    if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
-      transportRows.push(["Vehicle No", t.vehicleNumber || requestCore.vehicleNumber || "-"]);
-      transportRows.push(["Vehicle Model", t.vehicleModel || requestCore.vehicleModel || "-"]);
-    }
-
-    drawKeyValueBox("Transport Details", transportRows);
-
-    const pageCount = doc.getNumberOfPages();
-    for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
-      doc.setPage(pageNo);
-      const footerY = pageHeight - 24;
-      doc.setDrawColor(...palette.border);
-      doc.line(margin, footerY - 10, pageWidth - margin, footerY - 10);
-      doc.setFontSize(8);
-      doc.setTextColor(...palette.slate);
-      doc.text("Electronically generated gate pass document", margin, footerY);
-      doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, {
-        align: "right",
-      });
-    }
-
-    const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
-    doc.save(`SLT_GatePass_${safeRef}.pdf`);
-  };
-
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-4xl w-full flex flex-col h-[95vh] overflow-hidden shadow-2xl">
-        {/* Header */}
-        <div
-          className={`p-3 pl-6 pr-6 flex-shrink-0 ${
-            activeTab === "pending"
-              ? "bg-gradient-to-r from-amber-600 to-orange-300"
-              : activeTab === "approved"
-                ? "bg-gradient-to-br from-emerald-600 to-green-600"
-                : "bg-gradient-to-br from-rose-600 to-red-400"
-          }`}
-        >
+      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+        {/* Modal Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 flex-shrink-0">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold text-white flex items-center">
-              <FaBoxOpen className="mr-3" /> Gate Pass Details
+              <FaClipboardCheck className="mr-3" /> Gate Pass Details
             </h2>
-            <button
-              onClick={onClose}
-              className="text-white/80 hover:text-white transition-colors"
-            >
+            <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
               <FaTimes className="text-xl" />
             </button>
           </div>
-          <div className="mt-2 text-white/80">Reference: {request.refNo}</div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-gray-200">
-          <button
-            className={`px-6 py-3 text-sm font-medium transition-colors flex items-center ${
-              currentTab === "details"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-            onClick={() => setCurrentTab("details")}
-          >
-            <FaInfoCircle className="mr-2" /> Request Details
-          </button>
-          {activeTab === "pending" && (
-            <>
+          {/* Tab Navigation */}
+          <div className="flex space-x-2 mt-4">
+            {tabOrder.map((tab) => (
               <button
-                className={`px-6 py-3 text-sm font-medium transition-colors flex items-center ${
-                  currentTab === "loading"
-                    ? "text-blue-600 border-b-2 border-blue-600"
-                    : "text-gray-500 hover:text-gray-700"
+                key={tab}
+                onClick={() => setCurrentTab(tab)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  currentTab === tab
+                    ? "bg-white text-blue-800"
+                    : "bg-white/20 text-white hover:bg-white/30"
                 }`}
-                onClick={() => setCurrentTab("loading")}
               >
-                <FaBoxes className="mr-2" />
-                {DispatchStatus ? "Loading Details" : "Unloading Details"}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
-              {/* <button
-                className={`px-6 py-3 text-sm font-medium transition-colors flex items-center ${
-                  currentTab === 'transport'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-                onClick={() => setCurrentTab('transport')}
-              >
-                <FaTruck className="mr-2" /> Transportation Details
-              </button> */}
-            </>
-          )}
-
-          <button
-            className={`px-6 py-3 text-sm font-medium transition-colors flex items-center ${
-              currentTab === "returnable"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-            onClick={() => setCurrentTab("returnable")}
-          >
-            <FaClipboardCheck className="mr-2" /> Returnable items
-          </button>
-
-          <button
-            className={`px-6 py-3 text-sm font-medium transition-colors flex items-center ${
-              currentTab === "navigation"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-            onClick={() => setCurrentTab("navigation")}
-          >
-            <FaCheckCircle className="mr-2" /> Receive
-          </button>
+            ))}
+          </div>
         </div>
 
         {/* Main Content - Make this scrollable */}
