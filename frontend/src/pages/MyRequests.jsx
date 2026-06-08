@@ -8,7 +8,7 @@ import {
   getExecutiveOfficers,
   updateExecutiveOfficer,
   cancelRequest,
-  updateReturnableItems, // <-- used for saving sender edits
+  updateReturnableItems,
 } from "../services/RequestService.js";
 import {
   FaClock,
@@ -25,10 +25,9 @@ import {
   FaBan,
   FaUndo,
 } from "react-icons/fa";
-import { jsPDF } from "jspdf";
-import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { markItemsAsReturned } from "../services/myRequestService.js";
 import StatusTimelineModal from "../components/StatusTimelineModal";
+import { generateGatePassPdf } from "../utils/gatePassPdf.js";
 
 const StatusPill = ({ statusCode, onClick, referenceNumber }) => {
   const getStatusLabel = (code) => {
@@ -76,7 +75,6 @@ const StatusPill = ({ statusCode, onClick, referenceNumber }) => {
   );
 };
 
-// In the ImageViewerModal component
 const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
   const [imageUrls, setImageUrls] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -85,12 +83,10 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
   useEffect(() => {
     if (images && images.length > 0) {
       setLoading(true);
-
       const urls = images
         .slice(0, 5)
         .map((img) => getImageUrlSync(img))
         .filter(Boolean);
-
       setImageUrls(urls);
       setLoading(false);
     } else {
@@ -113,7 +109,6 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-50">
       <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border border-gray-700">
         <div className="relative">
-          {/* Main display area */}
           <div className="h-80 md:h-96 overflow-hidden relative bg-black">
             {loading ? (
               <div className="flex items-center justify-center h-full">
@@ -125,10 +120,6 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
                 alt={`${itemDescription} ${activeIndex + 1}`}
                 className="w-full h-full object-contain"
                 onError={(e) => {
-                  console.error(
-                    "Image failed to load:",
-                    imageUrls[activeIndex],
-                  );
                   e.target.src =
                     "https://via.placeholder.com/400x300?text=Image+Not+Found";
                 }}
@@ -139,52 +130,27 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
               </div>
             )}
 
-            {/* Navigation arrows - only show if multiple images */}
             {imageUrls.length > 1 && (
               <>
                 <button
                   onClick={handlePrev}
                   className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 p-2 rounded-full text-white transition-all"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    className="w-6 h-6"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-
                 <button
                   onClick={handleNext}
                   className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 p-2 rounded-full text-white transition-all"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    className="w-6 h-6"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               </>
             )}
 
-            {/* Image counter */}
             {imageUrls.length > 0 && (
               <div className="absolute bottom-4 right-4 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
                 {activeIndex + 1} / {imageUrls.length}
@@ -192,12 +158,9 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
             )}
           </div>
 
-          {/* Header with close button */}
           <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/70 to-transparent">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-semibold text-white">
-                {itemDescription}
-              </h3>
+              <h3 className="text-xl font-semibold text-white">{itemDescription}</h3>
               <button
                 onClick={onClose}
                 className="text-white hover:text-white/80 bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all"
@@ -208,7 +171,6 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
           </div>
         </div>
 
-        {/* Thumbnail gallery */}
         {imageUrls.length > 1 && (
           <div className="p-4 flex justify-center gap-2 bg-gray-900">
             {imageUrls.map((url, index) => (
@@ -216,9 +178,7 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
                 key={index}
                 onClick={() => setActiveIndex(index)}
                 className={`w-16 h-16 rounded-lg overflow-hidden cursor-pointer transition-all transform hover:scale-105 ${
-                  index === activeIndex
-                    ? "ring-2 ring-blue-500 scale-105"
-                    : "opacity-70"
+                  index === activeIndex ? "ring-2 ring-blue-500 scale-105" : "opacity-70"
                 }`}
               >
                 <img
@@ -237,6 +197,7 @@ const ImageViewerModal = ({ images, isOpen, onClose, itemDescription }) => {
     </div>
   );
 };
+
 const RequestDetailsModal = ({
   isOpen,
   onClose,
@@ -245,7 +206,6 @@ const RequestDetailsModal = ({
   receiver,
   transporterDetails,
 }) => {
-  // Initialize with the correct value from request
   const [selectedExecutive, setSelectedExecutive] = useState("");
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [selectedItemImages, setSelectedItemImages] = useState([]);
@@ -254,13 +214,10 @@ const RequestDetailsModal = ({
   const [updateSuccess, setUpdateSuccess] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // NEW: editable items (for Sender)
   const [editedItems, setEditedItems] = useState([]);
   const [saveItemsSuccess, setSaveItemsSuccess] = useState(false);
   const [saveItemsError, setSaveItemsError] = useState("");
 
-  // Set the selected executive when request or executiveOfficers change
   useEffect(() => {
     if (request && executiveOfficers.length > 0) {
       const matchingOfficer = executiveOfficers.find(
@@ -278,11 +235,10 @@ const RequestDetailsModal = ({
       .catch((error) => console.error("Error:", error));
   }, []);
 
-  // Seed editable items whenever a new request opens
   useEffect(() => {
     if (!request) return;
     const items = Array.isArray(request.items) ? request.items : [];
-    setEditedItems(items.map((i) => ({ ...i }))); // clone
+    setEditedItems(items.map((i) => ({ ...i })));
     setSaveItemsSuccess(false);
     setSaveItemsError("");
   }, [request?._id]);
@@ -330,13 +286,8 @@ const RequestDetailsModal = ({
         } item(s) as returned`,
       );
 
-      // Clear selection
       setSelectedItems([]);
-
-      // Close modal and refresh the parent component
       onClose();
-
-      // Optional: Refresh the page to show updated data
       window.location.reload();
     } catch (error) {
       console.error("Error marking items as returned:", error);
@@ -362,454 +313,19 @@ const RequestDetailsModal = ({
     setIsImageModalOpen(true);
   };
 
-  const handleSaveReturnables = async () => {
-    try {
-      setSaveItemsError("");
-      // Only send returnable rows, keep payload minimal for backend
-      const payload = editedItems
-        .filter(
-          (it) => it?.itemReturnable === true || it?.isReturnable === true,
-        )
-        .map((it) => ({
-          _id: it._id, // <-- match DB item
-          serialNumber: it.serialNumber || "",
-          itemCode: it.itemCode || "",
-        }));
-
-      // If nothing to save, succeed silently
-      if (!payload.length) {
-        setSaveItemsSuccess(true);
-        setTimeout(() => setSaveItemsSuccess(false), 2500);
-        return;
-      }
-
-      await updateReturnableItems(request.referenceNumber, payload);
-      setSaveItemsSuccess(true);
-      setTimeout(() => setSaveItemsSuccess(false), 2500);
-    } catch (err) {
-      console.error("Failed to update returnable items:", err);
-      setSaveItemsError(
-        err?.response?.data?.message || "Failed to update returnable items",
-      );
-      setTimeout(() => setSaveItemsError(""), 3500);
-    }
-  };
-
   const generateItemDetailsPDF = (fullRequest) => {
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 36;
-    const usableWidth = pageWidth - margin * 2;
-    const lh = 12;
-    const palette = {
-      navy: [20, 55, 120],
-      slate: [78, 92, 115],
-      headingBg: [240, 245, 255],
-      border: [210, 218, 230],
-      tableHeader: [226, 234, 247],
-      text: [33, 37, 41],
-      rowAlt: [249, 251, 255],
-    };
-
-    const addHeader = () => {
-      try {
-        doc.addImage(logoUrl, "PNG", margin, 16, 96, 36);
-      } catch (e) {
-        // ignore logo rendering issues
-      }
-
-      // Header top rule (reduced gap under reference)
-      doc.setDrawColor(...palette.navy);
-      doc.setLineWidth(1.1);
-      doc.line(margin, 64, pageWidth - margin, 64);
-
-      doc.setFontSize(17);
-      doc.setTextColor(...palette.navy);
-      doc.text("SLT Gate Pass - Item Details", pageWidth / 2, 31, {
-        align: "center",
-      });
-
-      doc.setFontSize(9);
-      doc.setTextColor(...palette.slate);
-      doc.text("Official Item Movement Record", pageWidth / 2, 46, {
-        align: "center",
-      });
-
-      doc.setFontSize(9);
-      doc.setTextColor(...palette.slate);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 24, {
-        align: "right",
-      });
-
-      doc.setFontSize(10);
-      doc.setTextColor(...palette.text);
-      const refText = `Reference: ${fullRequest.referenceNumber || fullRequest.refNo || "-"}`;
-      doc.text(refText, pageWidth / 2, 58, { align: "center" });
-
-    };
-
-    const ensurePage = (neededHeight) => {
-      if (currentY + neededHeight > pageHeight - margin - 22) {
-        doc.addPage();
-        addHeader();
-        currentY = 84;
-      }
-    };
-
-    const drawKeyValueBox = (title, fields) => {
-      const titleH = 18;
-      const valueMaxWidth = usableWidth * 0.62;
-      const rows = fields.map((f) => {
-        const valueLines = doc.splitTextToSize(String(f[1] || "-"), valueMaxWidth);
-        const rowHeight = Math.max(18, valueLines.length * lh + 6);
-        return { key: f[0], valueLines, rowHeight };
-      });
-      const contentHeight = rows.reduce((sum, r) => sum + r.rowHeight, 0);
-
-      ensurePage(titleH + contentHeight + 18);
-
-      doc.setFillColor(...palette.headingBg);
-      doc.setDrawColor(...palette.border);
-      doc.rect(margin, currentY, usableWidth, titleH, "FD");
-
-      doc.setFontSize(10.5);
-      doc.setTextColor(...palette.navy);
-      doc.text(title, margin + 8, currentY + 12);
-
-      let rowTop = currentY + titleH;
-      rows.forEach((row, idx) => {
-        if (idx % 2 === 1) {
-          doc.setFillColor(...palette.rowAlt);
-          doc.rect(margin, rowTop, usableWidth, row.rowHeight, "F");
-        }
-
-        doc.setFontSize(9);
-        doc.setTextColor(...palette.slate);
-        doc.text(String(row.key || "-"), margin + 8, rowTop + 12);
-
-        doc.setTextColor(...palette.text);
-        row.valueLines.forEach((line, lineIdx) => {
-          doc.text(line, margin + usableWidth * 0.34 + 8, rowTop + 12 + lineIdx * lh);
-        });
-
-        doc.setDrawColor(...palette.border);
-        doc.setLineWidth(0.4);
-        doc.line(margin, rowTop + row.rowHeight, margin + usableWidth, rowTop + row.rowHeight);
-        rowTop += row.rowHeight;
-      });
-
-      doc.rect(margin, currentY, usableWidth, titleH + contentHeight);
-      currentY = rowTop + 12;
-    };
-
-    // start
-    addHeader();
-    let currentY = 84;
-
-    // Sender details
-    const senderInfo =
-      user ||
-      fullRequest.sender ||
-      fullRequest.senderDetails ||
-      fullRequest.user ||
-      fullRequest.requestDetails?.senderDetails ||
-      fullRequest.request?.senderDetails ||
-      {};
-
-    drawKeyValueBox("Sender Details", [
-      ["Name", senderInfo.name || senderInfo.displayName || "-"],
-      ["Service No", senderInfo.serviceNo || senderInfo.employeeNo || senderInfo.senderServiceNo || fullRequest.senderServiceNo || "-"],
-      ["Designation", senderInfo.designation || senderInfo.jobTitle || "-"],
-      ["Section", senderInfo.section || senderInfo.department || "-"],
-      ["Group", senderInfo.group || senderInfo.officeLocation || "-"],
-      ["Contact", senderInfo.contactNo || senderInfo.mobilePhone || senderInfo.phoneNumber || "-"],
-    ]);
-
-    const formatDateValue = (dateValue) => {
-      if (!dateValue) return "-";
-      const dateObj = new Date(dateValue);
-      if (Number.isNaN(dateObj.getTime())) return String(dateValue);
-      return dateObj.toLocaleDateString();
-    };
-
-    // Item Details (match the same boxed table layout as other sections)
-    const items = Array.isArray(fullRequest.items) ? fullRequest.items : [];
-    if (!items.length) {
-      drawKeyValueBox("Item Details", [["Items", "No items available"]]);
-    } else {
-      items.forEach((it, idx) => {
-        const itemFields = [
-          ["Description", it.itemDescription || it.description || "-"],
-          ["Serial No", it.serialNumber || "-"],
-          ["Item Code", it.itemCode || "-"],
-          ["Category", it.categoryDescription || it.category || "-"],
-          ["Quantity", String(it.itemQuantity || it.quantity || "-")],
-          ["Status", it.status || "-"],
-        ];
-
-        const isReturnable =
-          it.itemReturnable ||
-          it.isReturnable ||
-          String(it.status || "").toLowerCase() === "return to sender" ||
-          String(it.status || "").toLowerCase() === "returnable";
-
-        if (isReturnable) {
-          itemFields.push([
-            "Return Date",
-            formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
-          ]);
-        }
-
-        drawKeyValueBox(`Item Details - Item ${idx + 1}`, itemFields);
-      });
-    }
-
-    const hdrH = 20;
-
-    // Returnable Items (if any exist)
-    const returnableItems = items.filter(it => it.itemReturnable || it.isReturnable || it.status === "return to Sender");
-    if (returnableItems.length > 0) {
-      ensurePage(30 + 40);
-      doc.setFontSize(10.5);
-      doc.setTextColor(...palette.navy);
-      doc.text("Returnable Items", margin, currentY);
-      currentY += 14;
-
-      const retCols = ["Description", "Serial No", "Item Code", "Category", "Qty", "Return Date"];
-      const retColW = [usableWidth * 0.28, usableWidth * 0.14, usableWidth * 0.12, usableWidth * 0.12, usableWidth * 0.09, usableWidth * 0.25];
-      const retColX = [margin];
-      for (let i = 1; i < retColW.length; i++) retColX[i] = retColX[i - 1] + retColW[i - 1];
-
-      // header row
-      doc.setFillColor(...palette.tableHeader);
-      doc.setDrawColor(...palette.border);
-      doc.rect(margin, currentY, usableWidth, hdrH, "FD");
-      doc.setFontSize(9);
-      doc.setTextColor(...palette.navy);
-      retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
-      currentY += hdrH + 6;
-
-      returnableItems.forEach((it, idx) => {
-        const desc = it.itemDescription || it.description || "-";
-        const descLines = doc.splitTextToSize(desc, retColW[0] - 8);
-        const rowH = Math.max(20, descLines.length * lh + 6);
-
-        if (currentY + rowH > pageHeight - margin) {
-          doc.addPage();
-          addHeader();
-          currentY = 84;
-          // redraw header
-          doc.setFillColor(...palette.tableHeader);
-          doc.setDrawColor(...palette.border);
-          doc.rect(margin, currentY, usableWidth, hdrH, "FD");
-          doc.setFontSize(9);
-          doc.setTextColor(...palette.navy);
-          retCols.forEach((c, i) => doc.text(c, retColX[i] + 4, currentY + 13));
-          currentY += hdrH + 6;
-        }
-
-        if (idx % 2 === 1) {
-          doc.setFillColor(...palette.rowAlt);
-          doc.rect(margin, currentY - 2, usableWidth, rowH + 4, "F");
-        }
-        doc.setDrawColor(...palette.border);
-        doc.rect(margin, currentY - 2, usableWidth, rowH + 4);
-
-        doc.setFontSize(9);
-        doc.setTextColor(...palette.text);
-        descLines.forEach((ln, li) => doc.text(ln, retColX[0] + 4, currentY + 10 + li * lh));
-        doc.text(it.serialNumber || "-", retColX[1] + 4, currentY + 12);
-        doc.text(it.itemCode || "-", retColX[2] + 4, currentY + 12);
-        doc.text(it.categoryDescription || it.category || "-", retColX[3] + 4, currentY + 12);
-        doc.text(String(it.itemQuantity || it.quantity || "-"), retColX[4] + 4, currentY + 12);
-        doc.text(
-          formatDateValue(it.returnDate || it.returnBy || it.expectedReturnDate),
-          retColX[5] + 4,
-          currentY + 12,
-        );
-
-        currentY += rowH + 8;
-      });
-      currentY += 4;
-    }
-
-    // Location (always include required 3 fields)
-    drawKeyValueBox("Location Details", [
-      [
-        "Out Location",
-        fullRequest.outLocation ||
-          fullRequest.requestDetails?.outLocation ||
-          fullRequest.request?.outLocation ||
-          fullRequest.companyName ||
-          fullRequest.requestDetails?.companyName ||
-          fullRequest.request?.companyName ||
-          "-",
-      ],
-      [
-        "In Location",
-        fullRequest.inLocation ||
-          fullRequest.requestDetails?.inLocation ||
-          fullRequest.request?.inLocation ||
-          "-",
-      ],
-    ]);
-
-    // Receiver (support all response shapes so PDF always includes submitted values)
-    const requestCore = fullRequest.requestDetails || fullRequest.request || fullRequest;
-    const isNonSltDestination =
-      fullRequest.isNonSltPlace ?? requestCore.isNonSltPlace ?? false;
-
-    const recv =
-      fullRequest.receiver ||
-      fullRequest.receiverDetails ||
-      receiver || {
-        name: requestCore.receiverName || fullRequest.receiverName || "-",
-        nic: requestCore.receiverNIC || fullRequest.receiverNIC || "-",
-        contactNo:
-          requestCore.receiverContact || fullRequest.receiverContact || "-",
-        serviceNo:
-          requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
-        group: requestCore.receiverGroup || fullRequest.receiverGroup || "-",
-        companyName:
-          requestCore.companyName || fullRequest.companyName || "-",
-        email: requestCore.receiverEmail || fullRequest.receiverEmail || "-",
-      };
-
-    if (isNonSltDestination) {
-      drawKeyValueBox("Receiver Details", [
-        ["Name", recv.name || requestCore.receiverName || "-"],
-        [
-          "Company",
-          fullRequest.companyName || requestCore.companyName || recv.companyName || "-",
-        ],
-        [
-          "Contact",
-          recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-",
-        ],
-        ["NIC", recv.nic || requestCore.receiverNIC || fullRequest.receiverNIC || "-"],
-      ]);
-    } else {
-      drawKeyValueBox("Receiver Details", [
-        ["Name", recv.name || requestCore.receiverName || "-"],
-        [
-          "Service No",
-          recv.serviceNo || requestCore.receiverServiceNo || fullRequest.receiverServiceNo || "-",
-        ],
-        ["Group", recv.group || requestCore.receiverGroup || "-"],
-        ["Section", recv.section || requestCore.receiverSection || "-"],
-        ["Designation", recv.designation || requestCore.receiverDesignation || "-"],
-        [
-          "Contact",
-          recv.contactNo || requestCore.receiverContact || fullRequest.receiverContact || "-",
-        ],
-      ]);
-    }
-
-    // Transport (cover By Hand/Vehicle and SLT/Non-SLT with full fields)
-    const t =
-      fullRequest.transport ||
-      fullRequest.transportData ||
-      requestCore.transport ||
-      requestCore.transportData ||
-      {};
-
-    const transportRows = [
-      ["Transport Method", t.transportMethod || "-"],
-      ["Transporter Type", t.transporterType || "-"],
-    ];
-
-    if (String(t.transporterType || "").toUpperCase() === "SLT") {
-      transportRows.push([
-        "Service No",
-        t.transporterServiceNo || requestCore.transporterServiceNo || "-",
-      ]);
-      transportRows.push([
-        "Name",
-        transporterDetails?.name || t.transporterName || requestCore.transporterName || "-",
-      ]);
-      transportRows.push([
-        "Section",
-        transporterDetails?.section || t.transporterSection || requestCore.transporterSection || "-",
-      ]);
-      transportRows.push([
-        "Group",
-        transporterDetails?.group || t.transporterGroup || requestCore.transporterGroup || "-",
-      ]);
-      transportRows.push([
-        "Designation",
-        transporterDetails?.designation || t.transporterDesignation || requestCore.transporterDesignation || "-",
-      ]);
-      transportRows.push([
-        "Contact",
-        transporterDetails?.contactNo || t.transporterContact || requestCore.transporterContact || "-",
-      ]);
-    } else {
-      transportRows.push([
-        "Name",
-        t.nonSLTTransporterName || requestCore.nonSLTTransporterName || "-",
-      ]);
-      transportRows.push([
-        "NIC",
-        t.nonSLTTransporterNIC || requestCore.nonSLTTransporterNIC || "-",
-      ]);
-      transportRows.push([
-        "Contact",
-        t.nonSLTTransporterPhone || requestCore.nonSLTTransporterPhone || "-",
-      ]);
-      transportRows.push([
-        "Email",
-        t.nonSLTTransporterEmail || requestCore.nonSLTTransporterEmail || "-",
-      ]);
-    }
-      // Draw horizontal line after each row
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width,
-        yPos + 8,
-      );
-
-    if (String(t.transportMethod || "").toLowerCase() === "vehicle") {
-      transportRows.push([
-        "Vehicle No",
-        t.vehicleNumber || requestCore.vehicleNumber || "-",
-      ]);
-      transportRows.push([
-        "Vehicle Model",
-        t.vehicleModel || requestCore.vehicleModel || "-",
-      ]);
-    }
-
-    drawKeyValueBox("Transport Details", transportRows);
-
-    // footer
-    const pageCount = doc.getNumberOfPages();
-    for (let pageNo = 1; pageNo <= pageCount; pageNo++) {
-      doc.setPage(pageNo);
-      const footerY = pageHeight - 24;
-      doc.setDrawColor(...palette.border);
-      doc.line(margin, footerY - 10, pageWidth - margin, footerY - 10);
-      doc.setFontSize(8);
-      doc.setTextColor(...palette.slate);
-      doc.text(
-        "Electronically generated gate pass document",
-        margin,
-        footerY,
-      );
-      doc.text(`Page ${pageNo} of ${pageCount}`, pageWidth - margin, footerY, {
-        align: "right",
-      });
-    }
-
-    const safeRef = fullRequest.referenceNumber || fullRequest.refNo || "gatepass";
-    doc.save(`SLT_GatePass_${safeRef}.pdf`);
+    generateGatePassPdf(fullRequest, {
+      title: "SLT Gate Pass - Request Report",
+      subtitle: "Official request summary and item details",
+      senderFallback: user,
+      receiverFallback: receiver,
+      fileNamePrefix: "SLT_GatePass_Request",
+    });
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl max-w-4xl w-full overflow-hidden shadow-2xl">
-        {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold text-white flex items-center">
@@ -835,39 +351,27 @@ const RequestDetailsModal = ({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium text-blue-600">
-                  Service No
-                </label>
+                <label className="text-sm font-medium text-blue-600">Service No</label>
                 <p className="text-gray-800">{user?.serviceNo}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-blue-600">
-                  Name
-                </label>
+                <label className="text-sm font-medium text-blue-600">Name</label>
                 <p className="text-gray-800">{user?.name}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-blue-600">
-                  Section
-                </label>
+                <label className="text-sm font-medium text-blue-600">Section</label>
                 <p className="text-gray-800">{user?.section}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-blue-600">
-                  Group
-                </label>
+                <label className="text-sm font-medium text-blue-600">Group</label>
                 <p className="text-gray-800">{user?.group}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-blue-600">
-                  Designation
-                </label>
+                <label className="text-sm font-medium text-blue-600">Designation</label>
                 <p className="text-gray-800">{user?.designation}</p>
               </div>
               <div>
-                <label className="text-sm font-medium text-blue-600">
-                  Contact
-                </label>
+                <label className="text-sm font-medium text-blue-600">Contact</label>
                 <p className="text-gray-800">{user?.contactNo}</p>
               </div>
             </div>
@@ -895,27 +399,13 @@ const RequestDetailsModal = ({
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Serial Number
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Item Code
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Category
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Quantity
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Image
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Serial Number</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Code</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Image</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -940,7 +430,6 @@ const RequestDetailsModal = ({
                           ? new Date(item.returnDate).toLocaleDateString()
                           : "-"}
                       </td>
-
                       <td className="px-6 py-4">
                         <button
                           onClick={() => handleViewImages(item)}
@@ -967,29 +456,16 @@ const RequestDetailsModal = ({
             <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
               <FaUndo className="mr-2" /> Returnable Items
             </h3>
-
             <div className="overflow-x-auto rounded-xl border border-gray-200">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Select
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Serial Number
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Item Code
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Quantity
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Status
-                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Select</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Serial Number</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Code</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1019,7 +495,6 @@ const RequestDetailsModal = ({
                 </tbody>
               </table>
             </div>
-
             <div className="text-right mt-4">
               <button
                 onClick={handleBulkReturn}
@@ -1047,50 +522,33 @@ const RequestDetailsModal = ({
                     {request?.isNonSltPlace ? "Company Name" : "Out Location"}
                   </label>
                   <p className="text-gray-800">
-                    {request?.isNonSltPlace
-                      ? request?.companyName
-                      : request?.outLocation}
+                    {request?.isNonSltPlace ? request?.companyName : request?.outLocation}
                   </p>
                 </div>
                 {request?.isNonSltPlace && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Company Address
-                    </label>
+                    <label className="text-sm font-medium text-gray-600">Company Address</label>
                     <p className="text-gray-800">{request?.companyAddress}</p>
                   </div>
                 )}
                 <div>
-                  <label className="text-sm font-medium text-gray-600">
-                    In Location
-                  </label>
+                  <label className="text-sm font-medium text-gray-600">In Location</label>
                   <p className="text-gray-800">{request?.inLocation}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-600">
-                    Executive Officer
-                  </label>
+                  <label className="text-sm font-medium text-gray-600">Executive Officer</label>
                   <p className="text-gray-800">
                     {executiveOfficers.find(
-                      (officer) =>
-                        officer.serviceNo ===
-                        request?.executiveOfficerServiceNo,
+                      (officer) => officer.serviceNo === request?.executiveOfficerServiceNo,
                     )?.name || "N/A"}
                     {executiveOfficers.find(
-                      (officer) =>
-                        officer.serviceNo ===
-                        request?.executiveOfficerServiceNo,
+                      (officer) => officer.serviceNo === request?.executiveOfficerServiceNo,
                     )?.designation && (
                       <span className="text-gray-600">
-                        {" "}
-                        -{" "}
-                        {
-                          executiveOfficers.find(
-                            (officer) =>
-                              officer.serviceNo ===
-                              request?.executiveOfficerServiceNo,
-                          )?.designation
-                        }
+                        {" "}-{" "}
+                        {executiveOfficers.find(
+                          (officer) => officer.serviceNo === request?.executiveOfficerServiceNo,
+                        )?.designation}
                       </span>
                     )}
                   </p>
@@ -1105,16 +563,12 @@ const RequestDetailsModal = ({
                 </h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Name
-                    </label>
+                    <label className="text-sm font-medium text-gray-600">Name</label>
                     <p className="text-gray-800">{receiver?.name}</p>
                   </div>
                   {!request?.isNonSltPlace && (
                     <div>
-                      <label className="text-sm font-medium text-gray-600">
-                        Group
-                      </label>
+                      <label className="text-sm font-medium text-gray-600">Group</label>
                       <p className="text-gray-800">{receiver?.group}</p>
                     </div>
                   )}
@@ -1123,23 +577,17 @@ const RequestDetailsModal = ({
                       {request?.isNonSltPlace ? "NIC" : "Service No"}
                     </label>
                     <p className="text-gray-800">
-                      {request?.isNonSltPlace
-                        ? receiver?.nic
-                        : receiver?.serviceNo}
+                      {request?.isNonSltPlace ? receiver?.nic : receiver?.serviceNo}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Contact
-                    </label>
+                    <label className="text-sm font-medium text-gray-600">Contact</label>
                     <p className="text-gray-800">{receiver?.contactNo}</p>
                   </div>
                   {request?.isNonSltPlace && (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Email
-                        </label>
+                        <label className="text-sm font-medium text-gray-600">Email</label>
                         <p className="text-gray-800">
                           {receiver?.email || request?.receiverEmail || "N/A"}
                         </p>
@@ -1170,131 +618,72 @@ const RequestDetailsModal = ({
             <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
               <FaTruck className="mr-2" /> Transport Details
             </h3>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-600">
-                  Transport Method
-                </label>
-                <p className="text-gray-800">
-                  {request?.transport.transportMethod || "N/A"}
-                </p>
+                <label className="text-sm font-medium text-gray-600">Transport Method</label>
+                <p className="text-gray-800">{request?.transport.transportMethod || "N/A"}</p>
               </div>
 
               {request?.transport.transportMethod === "Vehicle" && (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Transporter Type
-                    </label>
-                    <p className="text-gray-800">
-                      {request?.transport.transporterType || "N/A"}
-                    </p>
+                    <label className="text-sm font-medium text-gray-600">Transporter Type</label>
+                    <p className="text-gray-800">{request?.transport.transporterType || "N/A"}</p>
                   </div>
-
                   {request?.transport.transporterType === "SLT" ? (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Service No
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.transporterServiceNo || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Service No</label>
+                        <p className="text-gray-800">{request?.transport.transporterServiceNo || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Name
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.name || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Name</label>
+                        <p className="text-gray-800">{transporterDetails?.name || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Section
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.section || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Section</label>
+                        <p className="text-gray-800">{transporterDetails?.section || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Group
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.group || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Group</label>
+                        <p className="text-gray-800">{transporterDetails?.group || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Designation
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.designation || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Designation</label>
+                        <p className="text-gray-800">{transporterDetails?.designation || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Contact
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.contactNo || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Contact</label>
+                        <p className="text-gray-800">{transporterDetails?.contactNo || "N/A"}</p>
                       </div>
                     </>
                   ) : (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter Name
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterName || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter Name</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterName || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter NIC
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterNIC || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter NIC</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterNIC || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter Phone
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterPhone || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter Phone</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterPhone || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter Email
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterEmail || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter Email</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterEmail || "N/A"}</p>
                       </div>
                     </>
                   )}
-
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Vehicle Number
-                    </label>
-                    <p className="text-gray-800">
-                      {request?.transport.vehicleNumber || "N/A"}
-                    </p>
+                    <label className="text-sm font-medium text-gray-600">Vehicle Number</label>
+                    <p className="text-gray-800">{request?.transport.vehicleNumber || "N/A"}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Vehicle Model
-                    </label>
-                    <p className="text-gray-800">
-                      {request?.transport.vehicleModel || "N/A"}
-                    </p>
+                    <label className="text-sm font-medium text-gray-600">Vehicle Model</label>
+                    <p className="text-gray-800">{request?.transport.vehicleModel || "N/A"}</p>
                   </div>
                 </>
               )}
@@ -1302,98 +691,53 @@ const RequestDetailsModal = ({
               {request?.transport.transportMethod === "By Hand" && (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">
-                      Transporter Type
-                    </label>
-                    <p className="text-gray-800">
-                      {request?.transport.transporterType || "N/A"}
-                    </p>
+                    <label className="text-sm font-medium text-gray-600">Transporter Type</label>
+                    <p className="text-gray-800">{request?.transport.transporterType || "N/A"}</p>
                   </div>
-
                   {request?.transport.transporterType === "SLT" ? (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Service No
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.transporterServiceNo || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Service No</label>
+                        <p className="text-gray-800">{request?.transport.transporterServiceNo || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Name
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.name || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Name</label>
+                        <p className="text-gray-800">{transporterDetails?.name || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Section
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.section || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Section</label>
+                        <p className="text-gray-800">{transporterDetails?.section || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Group
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.group || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Group</label>
+                        <p className="text-gray-800">{transporterDetails?.group || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Designation
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.designation || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Designation</label>
+                        <p className="text-gray-800">{transporterDetails?.designation || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Contact
-                        </label>
-                        <p className="text-gray-800">
-                          {transporterDetails?.contactNo || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Contact</label>
+                        <p className="text-gray-800">{transporterDetails?.contactNo || "N/A"}</p>
                       </div>
                     </>
                   ) : (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter Name
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterName || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter Name</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterName || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter NIC
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterNIC || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter NIC</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterNIC || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter Phone
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterPhone || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter Phone</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterPhone || "N/A"}</p>
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-gray-600">
-                          Transporter Email
-                        </label>
-                        <p className="text-gray-800">
-                          {request?.transport.nonSLTTransporterEmail || "N/A"}
-                        </p>
+                        <label className="text-sm font-medium text-gray-600">Transporter Email</label>
+                        <p className="text-gray-800">{request?.transport.nonSLTTransporterEmail || "N/A"}</p>
                       </div>
                     </>
                   )}
@@ -1403,27 +747,11 @@ const RequestDetailsModal = ({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="bg-gray-50 px-6 py-4 flex justify-between items-center">
           <div className="text-sm text-gray-500">
             <span className="mr-2">Tip:</span>
-            Only <span className="font-medium">returnable</span> items allow
-            editing of Serial No & Model.
+            Only <span className="font-medium">returnable</span> items allow editing of Serial No & Model.
           </div>
-          {/*<div className="flex gap-2">
-            <button
-              onClick={handleSaveReturnables}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              Save Returnable Item Edits
-            </button>
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
-            >
-              Close
-            </button>
-          </div>*/}
         </div>
       </div>
     </div>
@@ -1443,7 +771,6 @@ const GatePassRequests = () => {
   const [transportData, setTransportData] = useState(null);
   const [cancelSuccess, setCancelSuccess] = useState(false);
 
-  // In your useEffect where you fetch data
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("user"));
     if (userData) {
@@ -1451,22 +778,16 @@ const GatePassRequests = () => {
       getGatePassRequest(userData.serviceNo)
         .then((data) => {
           const requestsArray = Array.isArray(data) ? data : [data];
-
-          // Sort requests by creation date (newest first)
           const sortedRequests = requestsArray.sort((a, b) => {
             const dateA = new Date(a.createdAt || a.updatedAt || 0);
             const dateB = new Date(b.createdAt || b.updatedAt || 0);
-            return dateB - dateA; // Descending order (newest first)
+            return dateB - dateA;
           });
-
           setRequests(sortedRequests);
-
-          // Fetch receiver details only for requests with valid receiverServiceNo
           sortedRequests.forEach((request) => {
             if (request.receiverServiceNo) {
               searchReceiverByServiceNo(request.receiverServiceNo)
                 .then((receiverData) => {
-                  // Update the request with receiver details
                   setRequests((prevRequests) =>
                     prevRequests.map((r) =>
                       r.referenceNumber === request.referenceNumber
@@ -1475,11 +796,8 @@ const GatePassRequests = () => {
                     ),
                   );
                 })
-                .catch((error) => {
-                  // Silently handle missing receivers - expected for test data
-                });
+                .catch(() => {});
             } else {
-              // Set an empty receiver object for requests with no receiver
               setRequests((prevRequests) =>
                 prevRequests.map((r) =>
                   r.referenceNumber === request.referenceNumber
@@ -1496,7 +814,6 @@ const GatePassRequests = () => {
 
   useEffect(() => {
     if (selectedRequest) {
-      // Set the receiver from the selected request's receiver property
       setReceiver(selectedRequest.receiver || null);
     }
   }, [selectedRequest]);
@@ -1507,7 +824,6 @@ const GatePassRequests = () => {
       .includes(searchTerm.toLowerCase());
     const matchesStatus =
       statusFilter === "all" || request.status.toString() === statusFilter;
-
     return matchesSearch && matchesStatus;
   });
 
@@ -1521,10 +837,7 @@ const GatePassRequests = () => {
   const handleOpenModal = async (request) => {
     setSelectedRequest(request);
 
-    // Fetch receiver details if not already available
-    // For Non-SLT destinations, use the receiver info from the request itself
     if (request.isNonSltPlace) {
-      // Set Non-SLT receiver details
       setReceiver({
         name: request.receiverName,
         nic: request.receiverNIC,
@@ -1534,11 +847,8 @@ const GatePassRequests = () => {
         group: "Non-SLT",
       });
     } else if (request.receiverServiceNo && !request.receiver) {
-      // For SLT destinations, fetch from database
       try {
-        const receiverData = await searchReceiverByServiceNo(
-          request.receiverServiceNo,
-        );
+        const receiverData = await searchReceiverByServiceNo(request.receiverServiceNo);
         setReceiver(receiverData);
       } catch (error) {
         console.error("Error fetching receiver details:", error);
@@ -1553,24 +863,17 @@ const GatePassRequests = () => {
         const transportResponse = await searchEmployeeByServiceNo(
           request.transport.transporterServiceNo,
         );
-
-        console.log("Transport response:", transportResponse); // Debug log
-
-        // Extract the employee data from the nested response
         const employee = transportResponse?.data?.data?.[0];
-
         if (employee) {
           setTransportData({
             name: `${employee.employeeTitle || ""} ${employee.employeeFirstName || ""} ${employee.employeeSurname || ""}`.trim(),
-            serviceNo:
-              employee.employeeNo || request.transport.transporterServiceNo,
+            serviceNo: employee.employeeNo || request.transport.transporterServiceNo,
             designation: employee.designation || "-",
             section: employee.empSection || "-",
             group: employee.empGroup || "-",
             contactNo: employee.mobileNo || "-",
           });
         } else {
-          // If no employee data found, set to null
           setTransportData(null);
         }
       } catch (error) {
@@ -1591,19 +894,15 @@ const GatePassRequests = () => {
         setCancelSuccess(true);
         setTimeout(() => setCancelSuccess(false), 3000);
 
-        // Refresh the requests list
         const userData = JSON.parse(localStorage.getItem("user"));
         if (userData) {
           const data = await getGatePassRequest(userData.serviceNo);
           const requestsArray = Array.isArray(data) ? data : [data];
-
-          // Sort requests by creation date (newest first)
           const sortedRequests = requestsArray.sort((a, b) => {
             const dateA = new Date(a.createdAt || a.updatedAt || 0);
             const dateB = new Date(b.createdAt || b.updatedAt || 0);
-            return dateB - dateA; // Descending order (newest first)
+            return dateB - dateA;
           });
-
           setRequests(sortedRequests);
         }
       } catch (error) {
@@ -1615,13 +914,12 @@ const GatePassRequests = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 p-8">
-      {/* Success message for cancel */}
       {cancelSuccess && (
         <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
           Request canceled successfully!
         </div>
       )}
-      {/* Search and Filter Section */}
+
       <div className="bg-white rounded-2xl shadow-xl p-6 mb-8">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
@@ -1677,7 +975,6 @@ const GatePassRequests = () => {
         )}
       </div>
 
-      {/* Main Content */}
       <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-xl font-semibold text-gray-800 flex items-center">
@@ -1706,14 +1003,9 @@ const GatePassRequests = () => {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredRequests.map((request) => (
-                <tr
-                  key={request.referenceNumber}
-                  className="hover:bg-gray-50 transition-colors"
-                >
+                <tr key={request.referenceNumber} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {request.referenceNumber}
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{request.referenceNumber}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-500">
@@ -1744,12 +1036,9 @@ const GatePassRequests = () => {
                       >
                         <FaEye className="mr-2" /> View Details
                       </button>
-                      {/* Add cancel button - only show for pending status (status 1) */}
                       {request.status === 1 && (
                         <button
-                          onClick={() =>
-                            handleCancelRequest(request.referenceNumber)
-                          }
+                          onClick={() => handleCancelRequest(request.referenceNumber)}
                           className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors"
                         >
                           <FaBan className="mr-2" /> Cancel
@@ -1763,7 +1052,6 @@ const GatePassRequests = () => {
           </table>
         </div>
 
-        {/* Empty State */}
         {filteredRequests.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -1779,7 +1067,6 @@ const GatePassRequests = () => {
         )}
       </div>
 
-      {/* Details Modal */}
       <RequestDetailsModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
