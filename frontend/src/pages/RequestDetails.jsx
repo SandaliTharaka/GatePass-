@@ -26,6 +26,7 @@ import {
 import { jsPDF } from "jspdf";
 import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { searchSenderByServiceNo } from "../services/RequestService.js";
+import { generateGatePassPdf } from "../utils/gatePassPdf.js";
 
 const STAGE_ORDER = ["Executive", "Verify", "Petrol Leader", "Receive"];
 
@@ -440,6 +441,92 @@ const RequestDetailsModal = ({
   const printReport = (reportData) => {
     try {
       const data = reportData || {};
+
+      return generateGatePassPdf(data, {
+        title: "SLT Gate Pass - Request Report",
+        subtitle: "Officer workflow, transport, and item details",
+        fileNamePrefix: "SLT_GatePass_RequestDetails",
+        extraSections: [
+          {
+            title: "Loading Details",
+            rows: [
+              {
+                label: "Loading Location",
+                value:
+                  data.requestDetails?.loading?.loadingLocation ||
+                  data.request?.loading?.loadingLocation ||
+                  data.loading?.loadingLocation,
+              },
+              {
+                label: "Loading Time",
+                value:
+                  data.requestDetails?.loading?.loadingTime ||
+                  data.request?.loading?.loadingTime ||
+                  data.loading?.loadingTime,
+              },
+              {
+                label: "Staff Type",
+                value:
+                  data.requestDetails?.loading?.staffType ||
+                  data.request?.loading?.staffType ||
+                  data.loading?.staffType,
+              },
+              {
+                label: "Staff Service No",
+                value:
+                  data.requestDetails?.loading?.staffServiceNo ||
+                  data.request?.loading?.staffServiceNo ||
+                  data.loading?.staffServiceNo,
+              },
+            ],
+            accentColor: [58, 104, 188],
+          },
+          {
+            title: "Unloading Details",
+            rows: [
+              {
+                label: "Loading Location",
+                value:
+                  data.requestDetails?.unLoading?.loadingLocation ||
+                  data.request?.unLoading?.loadingLocation ||
+                  data.unLoading?.loadingLocation,
+              },
+              {
+                label: "Loading Time",
+                value:
+                  data.requestDetails?.unLoading?.loadingTime ||
+                  data.request?.unLoading?.loadingTime ||
+                  data.unLoading?.loadingTime,
+              },
+              {
+                label: "Staff Type",
+                value:
+                  data.requestDetails?.unLoading?.staffType ||
+                  data.request?.unLoading?.staffType ||
+                  data.unLoading?.staffType,
+              },
+              {
+                label: "Staff Service No",
+                value:
+                  data.requestDetails?.unLoading?.staffServiceNo ||
+                  data.request?.unLoading?.staffServiceNo ||
+                  data.unLoading?.staffServiceNo,
+              },
+            ],
+            accentColor: [20, 137, 126],
+          },
+          {
+            title: "Selected Returnable Items",
+            rows: (data.requestDetails?.returnableDESCRIPTIONs || data.selectedReturnableDESCRIPTIONs || []).map(
+              (item, index) => ({
+                label: `Item ${index + 1}`,
+                value: `${item?.itemDescription || "-"} | Serial: ${item?.serialNumber || "-"} | Qty: ${item?.returnQuantity || item?.itemQuantity || "-"}`,
+              }),
+            ),
+            accentColor: [20, 137, 126],
+          },
+        ],
+      });
 
       console.log("PRINT REPORT DATA", data);
       console.log("EXECUTIVE OFFICER DATA", data.executiveOfficerData);
