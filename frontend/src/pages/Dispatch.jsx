@@ -18,14 +18,13 @@ import {
 } from "../services/RequestService.js";
 import { useToast } from "../components/ToastProvider.jsx";
 // Email notifications are handled server-side by backend controllers
-import { jsPDF } from "jspdf";
-import logoUrl from "../assets/SLTMobitel_Logo.png";
 import { useLocation } from "react-router-dom";
 import {
   getCachedUser,
   getCachedUserAllowRefresh,
   setCachedUser,
 } from "../utils/userCache.js";
+import { generateGatePassPdf, printGatePassPdf } from "../utils/gatePassPdf.js";
 import { useAutoRefetch } from "../hooks/useRealtimeUpdates.js";
 import {
   FaClock,
@@ -54,6 +53,15 @@ import {
 } from "react-icons/fa";
 
 const generateitemDetailsPDF = (fullRequest) => {
+    return generateGatePassPdf(fullRequest, {
+      title: "SLT Gate Pass - Item Report",
+      subtitle: "Decorated item, receiver, and transport summary",
+      senderFallback: user,
+      transporterDetails: transportData,
+      receiverFallback: selectedItem?.receiverDetails || selectedItem?.receiver,
+      fileNamePrefix: "SLT_GatePass_Items",
+    });
+
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -595,6 +603,7 @@ const Dispatch = () => {
   // Fetch Approved items
   useEffect(() => {
     const fetchData = async () => {
+      if (!user || !user.branches) return;
       try {
         const data = await getApprovedStatuses();
 
@@ -727,11 +736,12 @@ const Dispatch = () => {
       }
     };
     fetchData();
-  }, [activeTab, user]);
+  }, [activeTab]);
 
   // Fetch Rejected items
   useEffect(() => {
     const fetchData = async () => {
+      if (!user || !user.branches) return;
       try {
         const data = await getRejectedStatuses();
 
@@ -865,7 +875,7 @@ const Dispatch = () => {
       }
     };
     fetchData();
-  }, [activeTab, user]);
+  }, [activeTab]);
 
   // --- Approval Logic ---
 
@@ -2000,6 +2010,7 @@ const Dispatch = () => {
         showToast={showToast}
         transporterDetails={transportData}
         isSuperAdmin={isSuperAdmin}
+        user={user}
       />
     </div>
   );
@@ -2021,6 +2032,7 @@ const RequestDetailsModal = ({
   showToast,
   transporterDetails,
   isSuperAdmin,
+  user,
 }) => {
   const [currentTab, setCurrentTab] = useState("details");
   const tabOrder = ["details", "navigation"];
@@ -2142,6 +2154,15 @@ const RequestDetailsModal = ({
   };
 
   const printReport = (request, transporterDetails) => {
+    return printGatePassPdf(request, {
+      title: "SLT Gate Pass - Dispatch Report",
+      subtitle: "Complete request, transport, and approval summary",
+      senderFallback: user,
+      transporterDetails,
+      receiverFallback: request?.receiverDetails || request?.receiver,
+      fileNamePrefix: "SLT_GatePass_Dispatch",
+    });
+
     const printFrame = document.createElement("iframe");
     printFrame.style.position = "absolute";
     printFrame.style.top = "-9999px";
@@ -2558,167 +2579,14 @@ const RequestDetailsModal = ({
     };
   };
 
-  const generateitemDetailsPDF = (items, refNo) => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-
-    try {
-      doc.addImage(logoUrl, "PNG", margin, 10, 40, 20);
-    } catch (error) {
-      console.error("Error adding logo:", error);
-    }
-
-    doc.setFontSize(18);
-    doc.setTextColor(0, 51, 153);
-    doc.text("SLT Gate Pass - item Details", pageWidth / 2, 20, {
-      align: "center",
+  const generateitemDetailsPDF = (fullRequest) => {
+    return generateGatePassPdf(fullRequest, {
+      title: "SLT Gate Pass - Item Report",
+      subtitle: "Item, receiver, and transport summary",
+      transporterDetails,
+      receiverFallback: fullRequest?.receiverDetails || fullRequest?.receiver,
+      fileNamePrefix: "SLT_GatePass_Items",
     });
-
-    doc.setFontSize(12);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Reference: ${request.refNo}`, pageWidth / 2, 30, {
-      align: "center",
-    });
-
-    const currentDate = new Date().toLocaleDateString();
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${currentDate}`, pageWidth - margin, 20, {
-      align: "right",
-    });
-
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, 35, pageWidth - margin, 35);
-
-    doc.setFontSize(14);
-    doc.setTextColor(0, 0, 0);
-    doc.text("item Details", margin, 45);
-
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setTextColor(80, 80, 80);
-    doc.setDrawColor(200, 200, 200);
-
-    const col1Width = 60;
-    const col2Width = 40;
-    const col3Width = 30;
-    const col4Width = 20;
-    const col5Width = 30;
-
-    doc.setFillColor(240, 240, 240);
-    doc.rect(
-      margin,
-      yPos,
-      col1Width + col2Width + col3Width + col4Width + col5Width,
-      8,
-      "F",
-    );
-
-    doc.text("item", margin + 3, yPos + 5.5);
-    doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-    doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-    doc.text("Qty", margin + col1Width + col2Width + col3Width + 3, yPos + 5.5);
-    doc.text(
-      "Item Code",
-      margin + col1Width + col2Width + col3Width + col4Width + 3,
-      yPos + 5.5,
-    );
-
-    yPos += 8;
-
-    items.forEach((item, index) => {
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
-        doc.setFillColor(240, 240, 240);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-        doc.text("item", margin + 3, yPos + 5.5);
-        doc.text("Serial Number", margin + col1Width + 3, yPos + 5.5);
-        doc.text("Category", margin + col1Width + col2Width + 3, yPos + 5.5);
-        doc.text(
-          "Qty",
-          margin + col1Width + col2Width + col3Width + 3,
-          yPos + 5.5,
-        );
-        doc.text(
-          "Item Code",
-          margin + col1Width + col2Width + col3Width + col4Width + 3,
-          yPos + 5.5,
-        );
-        yPos += 8;
-      }
-
-      if (index % 2 === 1) {
-        doc.setFillColor(248, 248, 248);
-        doc.rect(
-          margin,
-          yPos,
-          col1Width + col2Width + col3Width + col4Width + col5Width,
-          8,
-          "F",
-        );
-      }
-
-      const truncateText = (text, maxLength) => {
-        if (!text) return "N/A";
-        return text.length > maxLength
-          ? text.substring(0, maxLength) + "..."
-          : text;
-      };
-
-      doc.text(
-        truncateText(item?.itemDescription || "N/A", 25),
-        margin + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.serialNumber || "N/A", 15),
-        margin + col1Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.categoryDescription || "N/A", 12),
-        margin + col1Width + col2Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        item?.itemQuantity?.toString() || "1",
-        margin + col1Width + col2Width + col3Width + 3,
-        yPos + 5.5,
-      );
-      doc.text(
-        truncateText(item?.itemCode || "N/A", 15),
-        margin + col1Width + col2Width + col3Width + col4Width + 3,
-        yPos + 5.5,
-      );
-
-      doc.line(
-        margin,
-        yPos + 8,
-        margin + col1Width + col2Width + col3Width + col4Width + col5Width,
-        yPos + 8,
-      );
-
-      yPos += 8;
-    });
-
-    const footerYPos = doc.internal.pageSize.getHeight() - 10;
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      "This is an electronically generated document and does not require signature.",
-      pageWidth / 2,
-      footerYPos,
-      { align: "center" },
-    );
-
-    doc.save(`SLT_GatePass_DESCRIPTIONs_${request.refNo}.pdf`);
   };
 
   return (
