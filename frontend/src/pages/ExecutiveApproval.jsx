@@ -19,13 +19,12 @@ import {
 import { useToast } from "../components/ToastProvider.jsx";
 // Email notifications are handled server-side by backend controllers
 import { FaSearch } from "react-icons/fa";
-import { jsPDF } from "jspdf";
-import logoUrl from "../assets/SLTMobitel_Logo.png";
 import {
   getCachedUser,
   getCachedUserAllowRefresh,
   setCachedUser,
 } from "../utils/userCache.js";
+import { generateGatePassPdf } from "../utils/gatePassPdf.js";
 import { useAutoRefetch } from "../hooks/useRealtimeUpdates.js";
 import {
   FaClock,
@@ -1309,6 +1308,13 @@ const RequestDetailsModal = ({
   };
 
   const generateitemDetailsPDF = (fullRequest) => {
+    return generateGatePassPdf(fullRequest, {
+      title: "SLT Gate Pass - Approval Report",
+      subtitle: "Decorated request summary with transport and receiver details",
+      transporterDetails: transporterDetails,
+      fileNamePrefix: "SLT_GatePass_Approval",
+    });
+
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
